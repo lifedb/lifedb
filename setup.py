@@ -12,6 +12,7 @@ setup(
     install_requires=[
         'cherrypy',
         'google-api-python-client',
-        'fitbit'
+        'fitbit',
+        'matplotlib'
     ]
 )

@@ -19,6 +19,7 @@
     - Run ./bin/fitbit_get_auth.py and copy over appropriate values to ```conf.json```
 
 ## TODO
+- Add Toggl API [link](https://github.com/toggl/toggl_api_docs)
 - Create input abstraction
 
 ## Contributing
