@@ -50,14 +50,21 @@ for message in messages:
 
 ### PLOTTING
 data = {'2017-01-22': {'sleepEnd': datetime.datetime(2017, 1, 22, 6, 44), 'sleepStart': datetime.datetime(2017, 1, 22, 0, 0), 'running': 3.49, 'fat': 15.5, 'weight': 146.2}, '2017-01-21': {'sleepEnd': datetime.datetime(2017, 1, 21, 7, 43), 'sleepStart': datetime.datetime(2017, 1, 20, 23, 4), 'fat': 15.699999809265137, 'weight': 147}, '2017-01-20': {'sleepEnd': datetime.datetime(2017, 1, 20, 7, 16), 'sleepStart': datetime.datetime(2017, 1, 20, 1, 46), 'fat': 15.899999618530273, 'weight': 147.4}, '2017-01-16': {'sleepEnd': datetime.datetime(2017, 1, 16, 7, 49, 30), 'sleepStart': datetime.datetime(2017, 1, 15, 22, 41, 30), 'fat': 16, 'weight': 148.4}, '2017-01-17': {'sleepEnd': datetime.datetime(2017, 1, 17, 7, 0), 'sleepStart': datetime.datetime(2017, 1, 16, 22, 49), 'running': 3.35, 'fat': 16.100000381469727, 'weight': 148.2}, '2017-01-18': {'sleepEnd': datetime.datetime(2017, 1, 18, 5, 29, 30), 'sleepStart': datetime.datetime(2017, 1, 17, 20, 30, 30), 'running': 3.41, 'fat': 16.100000381469727, 'weight': 148.4}, '2017-01-19': {'sleepEnd': datetime.datetime(2017, 1, 19, 7, 28), 'sleepStart': datetime.datetime(2017, 1, 19, 0, 4), 'fat': 15.600000381469727, 'weight': 147.4}}
-
 running = [data[date]['running'] if 'running' in data[date].keys() else 0 for date in dateStrings]
-filename = 'Running (Week of %s)' % first.strftime('%Y-%m-%d')
+title = 'Running (Week of %s)' % first.strftime('%Y-%m-%d')
 
-plt.rcdefaults()
+dates.reverse()
+running.reverse()
+
+a = [first]
+a.extend(dates)
+
 fig, ax = plt.subplots()
 
-ax.barh(range(len(running)), running)
-ax.set_yticklabels(dateStrings)
+ax.bar(range(len(running)), running)
+ax.set_ylabel('Miles in 30 minutes')
+ax.set_title(title)
+ax.set_xticklabels(a)
+fig.autofmt_xdate()
 
 plt.show()
