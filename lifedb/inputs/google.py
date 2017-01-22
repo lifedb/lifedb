@@ -4,7 +4,7 @@ from oauth2client import client
 
 from lifedb import Config
 
-def get_credentials(scopes, flags):
+def get_credentials(scopes):
     credential_path = Config().get("GOOGLE_API_CLIENT_AUTH_FILEPATH")
     secret_path = Config().get('GOOGLE_API_CLIENT_SECRET_FILEPATH')
 

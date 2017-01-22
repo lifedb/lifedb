@@ -12,9 +12,14 @@
     - Create a file ```./conf/google.auth.conf.json```
     - Add GOOGLE_API_CLIENT_SECRET_FILEPATH to ```./conf/conf.json```
     - Add GOOGLE_API_CLIENT_AUTH_FILEPATH set to ```./conf/google.auth.conf.json``` to ```./conf/conf.json```
+- Fitbit
+    - Register a new application [here](https://dev.fitbit.com)
+    - Set callback url to http://127.0.0.1:8080
+    - Copy over Client ID and Client Secret to appropriate values in ```conf.json```
+    - Run ./bin/fitbit_get_auth.py and copy over appropriate values to ```conf.json```
 
-
-
+## TODO
+- Create input abstraction
 
 ## Contributing
 - Add any package requirements to setup.py

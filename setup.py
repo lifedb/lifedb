@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup
 
 setup(
     name='lifedb',
@@ -10,6 +10,7 @@ setup(
     author_email='dsuo@post.harvard.edu',
     description='',
     install_requires=[
+        'cherrypy',
         'google-api-python-client',
         'fitbit'
     ]
