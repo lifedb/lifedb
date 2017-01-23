@@ -1,8 +1,14 @@
+# Outputs
+plots
+
 # Sensitive files
 *conf.json
 
 # IDE
 .idea
+
+# Other
+.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
