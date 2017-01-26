@@ -20,6 +20,14 @@
 
 ## TODO
 - Add Toggl API [link](https://github.com/toggl/toggl_api_docs)
+- Add Calendar
+- Add Transactions
+- Add GPS
+- Add Weather
+- Add Automatic
+- Add pushup/pullup
+- Add hour tracking
+- Add rescuetime
 - Create input abstraction
 
 ## Contributing

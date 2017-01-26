@@ -13,6 +13,7 @@ setup(
         'cherrypy',
         'google-api-python-client',
         'fitbit',
-        'matplotlib'
+        'matplotlib',
+        'plaid-python'
     ]
 )

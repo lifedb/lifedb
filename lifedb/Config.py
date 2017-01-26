@@ -2,7 +2,10 @@ import json
 from pprint import pprint
 
 def readConf(path):
-    file = open(path, 'r')
+    try:
+        file = open(path, 'r')
+    except IOError:
+        file = open(path, 'w')
 
     conf = {}
     try:

@@ -144,7 +144,14 @@ data = {date: {} for date in dateStrings}
 ### TODO: Reading: Toggl
 ### TODO: Calisthenics: Email
 ### TODO: Rescuetime
-rescuetime = lifedb.inputs.rescuetime.RescueTime()
-print(rescuetime.get())
+# rescuetime = lifedb.inputs.rescuetime.RescueTime()
+# print(rescuetime.get())
 
 ### TODO: Automatic
+
+### TODO: Plaid
+# plaid = lifedb.inputs.plaid.Plaid()
+# print(plaid.api('connect', 'bofa', {
+#     'username': '***',
+#     'password': '***'
+# }).json())
