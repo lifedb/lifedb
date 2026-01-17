@@ -31,6 +31,17 @@ import {
   initializeDiffStorage,
 } from '../services/diffTracker';
 import { addConversation, getChatMessages, ChatMessage } from '../services/chatLog';
+import {
+  getDocument,
+  getText,
+  initializeWithContent,
+  saveState as saveCrdtState,
+  getContent as getCrdtContent,
+  onDocumentChange,
+  releaseDocument,
+  initCrdtStorage,
+} from '../services/crdtSync';
+import * as Y from 'yjs';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TextFile'>;
 
@@ -133,15 +144,32 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
   const [contextPreview, setContextPreview] = useState('');
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedContent = useRef('');
+  const ydocRef = useRef<Y.Doc | null>(null);
 
   const loadFile = useCallback(async () => {
     setIsLoading(true);
     try {
       await initializeDiffStorage();
+      await initCrdtStorage();
+      
+      // Load file content
       const fileContent = await readTextFile(path);
-      setContent(fileContent);
-      setOriginalContent(fileContent);
-      lastSavedContent.current = fileContent;
+      
+      // Initialize CRDT document
+      const doc = await getDocument(path);
+      ydocRef.current = doc;
+      
+      // If CRDT doc is empty, initialize with file content
+      const ytext = getText(doc);
+      if (ytext.length === 0 && fileContent.length > 0) {
+        initializeWithContent(doc, fileContent);
+      }
+      
+      // Use CRDT content as source of truth
+      const crdtContent = getCrdtContent(doc);
+      setContent(crdtContent);
+      setOriginalContent(crdtContent);
+      lastSavedContent.current = crdtContent;
       
       // Load context preview
       const context = await getAggregatedContext(path);
@@ -237,6 +265,10 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
       // Record the change for undo
       await recordChange(path, lastSavedContent.current, newContent, 'user');
       await writeTextFile(path, newContent);
+      
+      // Save CRDT state
+      await saveCrdtState(path);
+      
       lastSavedContent.current = newContent;
       await updateUndoRedoState();
     } catch (error) {
@@ -246,6 +278,16 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const handleContentChange = (newContent: string) => {
     setContent(newContent);
+    
+    // Update CRDT document
+    if (ydocRef.current) {
+      const ytext = getText(ydocRef.current);
+      // Replace all content with new content
+      ydocRef.current.transact(() => {
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, newContent);
+      });
+    }
     
     // Debounce save
     if (saveTimeoutRef.current) {
