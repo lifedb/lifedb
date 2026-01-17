@@ -23,6 +23,15 @@ interface SyncResult {
   error?: string;
 }
 
+export interface SyncProgress {
+  phase: 'scanning' | 'downloading' | 'uploading';
+  current: number;
+  total: number;
+  currentFile?: string;
+}
+
+export type SyncProgressCallback = (progress: SyncProgress) => void;
+
 /**
  * Get the currently selected repository
  */
@@ -91,8 +100,12 @@ export const pushToGitHub = async (): Promise<SyncResult> => {
   const { owner, repo } = repoInfo;
   const localDir = getLocalDocsDir();
   
+  console.log('Push: Local dir path:', localDir.uri);
+  console.log('Push: Local dir exists:', localDir.exists);
+  
   try {
     const localFiles = await getAllLocalFiles(localDir);
+    console.log('Push: Found local files:', localFiles.length, localFiles.map(f => f.path));
     let filesUploaded = 0;
     
     for (const file of localFiles) {
@@ -131,7 +144,9 @@ export const pushToGitHub = async (): Promise<SyncResult> => {
 /**
  * Download files from GitHub to local
  */
-export const pullFromGitHub = async (): Promise<SyncResult> => {
+export const pullFromGitHub = async (
+  onProgress?: SyncProgressCallback
+): Promise<SyncResult> => {
   const repoInfo = await getSelectedRepo();
   if (!repoInfo) {
     return { success: false, filesUploaded: 0, filesDownloaded: 0, error: 'No repository selected' };
@@ -140,52 +155,83 @@ export const pullFromGitHub = async (): Promise<SyncResult> => {
   const { owner, repo } = repoInfo;
   const localDir = getLocalDocsDir();
   
+  // Recursive function to get all files from GitHub including subdirectories
+  const getAllGitHubFiles = async (
+    path: string
+  ): Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>> => {
+    const items = await listRepoFiles(owner, repo, path);
+    let allFiles: Array<{ name: string; path: string; type: 'file' | 'dir' }> = [];
+    
+    for (const item of items) {
+      if (item.type === 'dir' && !item.name.startsWith('.')) {
+        // Recursively get files from subdirectory
+        const subFiles = await getAllGitHubFiles(item.path);
+        allFiles.push(...subFiles);
+      } else if (item.type === 'file') {
+        allFiles.push(item);
+      }
+    }
+    
+    return allFiles;
+  };
+  
   try {
     // Ensure local directory exists
     if (!localDir.exists) {
       await localDir.create();
     }
     
-    // Get all files from GitHub (recursive would require additional API calls)
-    const repoFiles = await listRepoFiles(owner, repo, '');
-    let filesDownloaded = 0;
+    onProgress?.({ phase: 'scanning', current: 0, total: 0 });
     
-    for (const repoFile of repoFiles) {
-      if (repoFile.type === 'file' && 
-          (repoFile.name.endsWith('.md') || repoFile.name.endsWith('.txt'))) {
-        
-        const githubContent = await getFileContent(owner, repo, repoFile.path);
-        if (!githubContent) continue;
-        
-        // Check if local file exists and is different
-        const localFile = new File(localDir, repoFile.path);
-        let shouldDownload = true;
-        
-        if (localFile.exists) {
-          try {
-            const localContent = await localFile.text();
-            shouldDownload = localContent !== githubContent.content;
-          } catch {
-            // If we can't read it, download it
-          }
+    // Get all files from GitHub recursively
+    const repoFiles = await getAllGitHubFiles('');
+    const mdFiles = repoFiles.filter(
+      f => f.type === 'file' && (f.name.endsWith('.md') || f.name.endsWith('.txt'))
+    );
+    console.log('Pull: Found GitHub files:', mdFiles.length);
+    let filesDownloaded = 0;
+    let processed = 0;
+    
+    for (const repoFile of mdFiles) {
+      processed++;
+      onProgress?.({ 
+        phase: 'downloading', 
+        current: processed, 
+        total: mdFiles.length,
+        currentFile: repoFile.name 
+      });
+      
+      const githubContent = await getFileContent(owner, repo, repoFile.path);
+      if (!githubContent) continue;
+      
+      // Check if local file exists and is different
+      const localFile = new File(localDir, repoFile.path);
+      let shouldDownload = true;
+      
+      if (localFile.exists) {
+        try {
+          const localContent = await localFile.text();
+          shouldDownload = localContent !== githubContent.content;
+        } catch {
+          // If we can't read it, download it
         }
-        
-        if (shouldDownload) {
-          // Ensure parent directories exist
-          const pathParts = repoFile.path.split('/');
-          if (pathParts.length > 1) {
-            let currentDir = localDir;
-            for (let i = 0; i < pathParts.length - 1; i++) {
-              currentDir = new Directory(currentDir, pathParts[i]);
-              if (!currentDir.exists) {
-                await currentDir.create();
-              }
+      }
+      
+      if (shouldDownload) {
+        // Ensure parent directories exist
+        const pathParts = repoFile.path.split('/');
+        if (pathParts.length > 1) {
+          let currentDir = localDir;
+          for (let i = 0; i < pathParts.length - 1; i++) {
+            currentDir = new Directory(currentDir, pathParts[i]);
+            if (!currentDir.exists) {
+              await currentDir.create();
             }
           }
-          
-          await localFile.write(githubContent.content);
-          filesDownloaded++;
         }
+        
+        await localFile.write(githubContent.content);
+        filesDownloaded++;
       }
     }
     
@@ -202,9 +248,11 @@ export const pullFromGitHub = async (): Promise<SyncResult> => {
 /**
  * Full sync: pull then push
  */
-export const syncWithGitHub = async (): Promise<SyncResult> => {
+export const syncWithGitHub = async (
+  onProgress?: SyncProgressCallback
+): Promise<SyncResult> => {
   // First pull to get latest
-  const pullResult = await pullFromGitHub();
+  const pullResult = await pullFromGitHub(onProgress);
   if (!pullResult.success) {
     return pullResult;
   }

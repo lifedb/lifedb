@@ -28,6 +28,32 @@ const GITHUB_USER_KEY = 'github_username';
 
 let octokitInstance: Octokit | null = null;
 
+// Base64 helpers for React Native (no Buffer available)
+const base64Decode = (str: string): string => {
+  try {
+    return decodeURIComponent(
+      atob(str)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+  } catch {
+    return atob(str);
+  }
+};
+
+const base64Encode = (str: string): string => {
+  try {
+    return btoa(
+      encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) =>
+        String.fromCharCode(parseInt(p1, 16))
+      )
+    );
+  } catch {
+    return btoa(str);
+  }
+};
+
 /**
  * Get the OAuth redirect URI
  * Uses Expo proxy for development (matches GitHub OAuth App callback URL)
@@ -179,7 +205,7 @@ export const getFileContent = async (
     });
 
     if ('content' in data && data.type === 'file') {
-      const content = Buffer.from(data.content, 'base64').toString('utf-8');
+      const content = base64Decode(data.content.replace(/\n/g, ''));
       return { content, sha: data.sha };
     }
     return null;
@@ -209,7 +235,7 @@ export const updateFile = async (
       repo,
       path,
       message,
-      content: Buffer.from(content).toString('base64'),
+      content: base64Encode(content),
       sha,
     });
     return true;

@@ -87,6 +87,13 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
     setSelectedRepo(repo.fullName);
   };
 
+  const [syncProgress, setSyncProgress] = useState<{
+    phase: string;
+    current: number;
+    total: number;
+    currentFile?: string;
+  } | null>(null);
+
   const handleSync = async () => {
     if (!selectedRepo) {
       Alert.alert('No Repository', 'Please select a repository first.');
@@ -94,8 +101,11 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
     }
     
     setIsSyncing(true);
+    setSyncProgress(null);
     try {
-      const result = await syncWithGitHub();
+      const result = await syncWithGitHub((progress) => {
+        setSyncProgress(progress);
+      });
       if (result.success) {
         const syncTime = await getLastSyncTime();
         setLastSync(syncTime);
@@ -110,6 +120,7 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
       Alert.alert('Error', 'Sync failed');
     } finally {
       setIsSyncing(false);
+      setSyncProgress(null);
     }
   };
 
@@ -219,7 +230,24 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
           )}
           
           {isSyncing ? (
-            <ActivityIndicator style={styles.syncingIndicator} color="#007AFF" />
+            <View style={styles.progressContainer}>
+              <ActivityIndicator color="#007AFF" />
+              {syncProgress && (
+                <View style={styles.progressInfo}>
+                  <Text style={styles.progressText}>
+                    {syncProgress.phase === 'scanning' 
+                      ? 'Scanning repository...' 
+                      : `${syncProgress.phase === 'downloading' ? 'Downloading' : 'Uploading'}: ${syncProgress.current} / ${syncProgress.total}`
+                    }
+                  </Text>
+                  {syncProgress.currentFile && (
+                    <Text style={styles.progressFile} numberOfLines={1}>
+                      {syncProgress.currentFile}
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
           ) : (
             <View style={styles.syncButtons}>
               <TouchableOpacity style={styles.syncButton} onPress={handlePull}>
@@ -374,5 +402,26 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600' as const,
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 16,
+    paddingVertical: 8,
+  },
+  progressInfo: {
+    flex: 1,
+  },
+  progressText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500' as const,
+  },
+  progressFile: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
 });
