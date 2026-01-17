@@ -1,0 +1,62 @@
+name: LifeDB CI
+
+on:
+  push:
+    branches: [ master ]
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    branches: [ master ]
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy to TestFlight'
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Typecheck
+        run: npm run typecheck
+
+  deploy:
+    name: Deploy to TestFlight
+    needs: typecheck
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and Submit
+        run: npx eas-cli build --platform ios --profile production --auto-submit --non-interactive
