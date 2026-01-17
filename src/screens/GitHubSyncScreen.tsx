@@ -23,6 +23,12 @@ import {
   listRepositories,
   getGitHubUsername,
 } from '../services/githubService';
+import {
+  syncWithGitHub,
+  pushToGitHub,
+  pullFromGitHub,
+  getLastSyncTime,
+} from '../services/githubSyncService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GitHubSync'>;
@@ -37,9 +43,11 @@ interface Repository {
 
 export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -51,15 +59,17 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
         return;
       }
 
-      const [repos, user, savedRepo] = await Promise.all([
+      const [repos, user, savedRepo, syncTime] = await Promise.all([
         listRepositories(),
         getGitHubUsername(),
         AsyncStorage.getItem(SELECTED_REPO_KEY),
+        getLastSyncTime(),
       ]);
 
       setRepositories(repos);
       setUsername(user);
       setSelectedRepo(savedRepo);
+      setLastSync(syncTime);
     } catch (error) {
       console.error('Error loading repositories:', error);
       Alert.alert('Error', 'Failed to load repositories');
@@ -73,16 +83,63 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
   }, [loadData]);
 
   const handleSelectRepo = async (repo: Repository) => {
+    await AsyncStorage.setItem(SELECTED_REPO_KEY, repo.fullName);
+    setSelectedRepo(repo.fullName);
+  };
+
+  const handleSync = async () => {
+    if (!selectedRepo) {
+      Alert.alert('No Repository', 'Please select a repository first.');
+      return;
+    }
+    
+    setIsSyncing(true);
     try {
-      await AsyncStorage.setItem(SELECTED_REPO_KEY, repo.fullName);
-      setSelectedRepo(repo.fullName);
-      Alert.alert(
-        'Repository Selected',
-        `"${repo.name}" is now your sync repository. Notes will be synced here.`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
+      const result = await syncWithGitHub();
+      if (result.success) {
+        const syncTime = await getLastSyncTime();
+        setLastSync(syncTime);
+        Alert.alert(
+          'Sync Complete',
+          `Downloaded: ${result.filesDownloaded} files\nUploaded: ${result.filesUploaded} files`
+        );
+      } else {
+        Alert.alert('Sync Failed', result.error || 'Unknown error');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to save selection');
+      Alert.alert('Error', 'Sync failed');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handlePush = async () => {
+    if (!selectedRepo) return;
+    setIsSyncing(true);
+    try {
+      const result = await pushToGitHub();
+      if (result.success) {
+        Alert.alert('Push Complete', `Uploaded ${result.filesUploaded} files to GitHub`);
+      } else {
+        Alert.alert('Push Failed', result.error || 'Unknown error');
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handlePull = async () => {
+    if (!selectedRepo) return;
+    setIsSyncing(true);
+    try {
+      const result = await pullFromGitHub();
+      if (result.success) {
+        Alert.alert('Pull Complete', `Downloaded ${result.filesDownloaded} files from GitHub`);
+      } else {
+        Alert.alert('Pull Failed', result.error || 'Unknown error');
+      }
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -125,9 +182,9 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Select Repository</Text>
+        <Text style={styles.headerTitle}>GitHub Sync</Text>
         <Text style={styles.headerSubtitle}>
-          Choose a repository to sync your notes with
+          Select a repository and sync your notes
         </Text>
         {username && (
           <View style={styles.userInfo}>
@@ -155,6 +212,30 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={styles.footerText}>
             Syncing to: <Text style={styles.footerRepo}>{selectedRepo}</Text>
           </Text>
+          {lastSync && (
+            <Text style={styles.lastSyncText}>
+              Last sync: {lastSync.toLocaleString()}
+            </Text>
+          )}
+          
+          {isSyncing ? (
+            <ActivityIndicator style={styles.syncingIndicator} color="#007AFF" />
+          ) : (
+            <View style={styles.syncButtons}>
+              <TouchableOpacity style={styles.syncButton} onPress={handlePull}>
+                <Ionicons name="cloud-download-outline" size={20} color="#fff" />
+                <Text style={styles.syncButtonText}>Pull</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.syncButton, styles.syncButtonPrimary]} onPress={handleSync}>
+                <Ionicons name="sync-outline" size={20} color="#fff" />
+                <Text style={styles.syncButtonText}>Sync</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.syncButton} onPress={handlePush}>
+                <Ionicons name="cloud-upload-outline" size={20} color="#fff" />
+                <Text style={styles.syncButtonText}>Push</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       )}
     </SafeAreaView>
@@ -261,5 +342,37 @@ const styles = StyleSheet.create({
   footerRepo: {
     fontWeight: '600' as const,
     color: '#007AFF',
+  },
+  lastSyncText: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  syncingIndicator: {
+    marginTop: 16,
+  },
+  syncButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 16,
+  },
+  syncButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#8E8E93',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  syncButtonPrimary: {
+    backgroundColor: '#007AFF',
+  },
+  syncButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600' as const,
   },
 });
