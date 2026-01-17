@@ -8,14 +8,14 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import * as SecureStore from 'expo-secure-store';
 import { Octokit } from '@octokit/rest';
+import Constants from 'expo-constants';
 
 // Ensure browser is ready for OAuth
 WebBrowser.maybeCompleteAuthSession();
 
-// GitHub OAuth configuration
-// NOTE: Replace with your GitHub OAuth App credentials
-const GITHUB_CLIENT_ID = 'YOUR_GITHUB_CLIENT_ID';
-const GITHUB_CLIENT_SECRET = 'YOUR_GITHUB_CLIENT_SECRET';
+// GitHub OAuth configuration from environment variables
+const GITHUB_CLIENT_ID = Constants.expoConfig?.extra?.githubClientId || '';
+const GITHUB_CLIENT_SECRET = Constants.expoConfig?.extra?.githubClientSecret || '';
 
 const discovery = {
   authorizationEndpoint: 'https://github.com/login/oauth/authorize',
