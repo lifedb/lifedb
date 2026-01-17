@@ -30,11 +30,14 @@ let octokitInstance: Octokit | null = null;
 
 /**
  * Get the OAuth redirect URI
+ * Uses Expo proxy for development (matches GitHub OAuth App callback URL)
  */
 export const getRedirectUri = (): string => {
   return AuthSession.makeRedirectUri({
     scheme: 'lifedb',
     path: 'github-oauth',
+    // Use Expo proxy for Expo Go development
+    preferLocalhost: false,
   });
 };
 
@@ -72,6 +75,7 @@ const getOctokit = async (): Promise<Octokit | null> => {
 export const loginWithGitHub = async (): Promise<{ success: boolean; error?: string }> => {
   try {
     const redirectUri = getRedirectUri();
+    console.log('OAuth redirect URI:', redirectUri);
     
     const request = new AuthSession.AuthRequest({
       clientId: GITHUB_CLIENT_ID,
@@ -79,6 +83,7 @@ export const loginWithGitHub = async (): Promise<{ success: boolean; error?: str
       redirectUri,
     });
 
+    // Use useProxy for Expo Go development
     const result = await request.promptAsync(discovery);
 
     if (result.type === 'success' && result.params.code) {

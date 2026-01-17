@@ -7,6 +7,7 @@ import { FolderScreen } from './src/screens/FolderScreen';
 import { TextFileScreen } from './src/screens/TextFileScreen';
 import { EditContextScreen } from './src/screens/EditContextScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { GitHubSyncScreen } from './src/screens/GitHubSyncScreen';
 import { initializeFileSystem } from './src/services/fileSystem';
 import { initializeDiffStorage } from './src/services/diffTracker';
 import { getApiKey } from './src/services/settingsService';
@@ -60,8 +61,9 @@ export default function App() {
           initialRouteName="Folder"
           screenOptions={{
             headerStyle: {
-              backgroundColor: '#fff',
+              backgroundColor: '#f5f5f5',
             },
+            headerShadowVisible: false,
             headerTintColor: '#007AFF',
             headerTitleStyle: {
               fontWeight: '600' as const,
@@ -87,6 +89,11 @@ export default function App() {
             name="Settings"
             component={SettingsScreen}
             options={{ title: 'Settings' }}
+          />
+          <Stack.Screen
+            name="GitHubSync"
+            component={GitHubSyncScreen}
+            options={{ title: 'GitHub Sync' }}
           />
         </Stack.Navigator>
       </NavigationContainer>

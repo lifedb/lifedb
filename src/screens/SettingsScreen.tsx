@@ -291,7 +291,7 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
             <View style={styles.buttonRow}>
               <TouchableOpacity
                 style={styles.secondaryButton}
-                onPress={() => Alert.alert('Coming Soon', 'Repository sync is coming in a future update!')}
+                onPress={() => navigation.navigate('GitHubSync')}
               >
                 <Text style={styles.secondaryButtonText}>Select Repository</Text>
               </TouchableOpacity>
