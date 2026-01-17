@@ -14,7 +14,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.danielsuo.lifedb"
+      "bundleIdentifier": "com.danielsuo.lifedb",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -26,6 +29,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "679654b2-51a7-4d49-94aa-0bec2f94eb4b"
+      }
+    },
+    "owner": "danielsuo"
   }
 }
