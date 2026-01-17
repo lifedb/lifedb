@@ -7,12 +7,26 @@ import {
   StyleSheet,
   Alert,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { getApiKey, setApiKey, clearApiKey } from '../services/settingsService';
 import { initializeGemini, isGeminiInitialized } from '../services/geminiService';
+import {
+  isGitHubAuthenticated,
+  getGitHubUsername,
+  loginWithGitHub,
+  logoutFromGitHub,
+} from '../services/githubService';
+import {
+  isICloudAvailable,
+  getLastBackupTime,
+  backupToICloud,
+  restoreFromICloud,
+} from '../services/icloudBackup';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -20,6 +34,16 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
   const [apiKey, setApiKeyState] = useState('');
   const [savedApiKey, setSavedApiKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // GitHub state
+  const [githubConnected, setGithubConnected] = useState(false);
+  const [githubUsername, setGithubUsername] = useState<string | null>(null);
+  const [githubLoading, setGithubLoading] = useState(false);
+  
+  // iCloud state
+  const [icloudAvailable, setIcloudAvailable] = useState(false);
+  const [lastBackup, setLastBackup] = useState<Date | null>(null);
+  const [backupLoading, setBackupLoading] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -33,6 +57,19 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
       if (key) {
         initializeGemini(key);
       }
+      
+      // Load GitHub status
+      const githubAuth = await isGitHubAuthenticated();
+      setGithubConnected(githubAuth);
+      if (githubAuth) {
+        const username = await getGitHubUsername();
+        setGithubUsername(username);
+      }
+      
+      // Load iCloud status
+      setIcloudAvailable(isICloudAvailable());
+      const backup = await getLastBackupTime();
+      setLastBackup(backup);
     } catch (error) {
       console.error('Error loading settings:', error);
     } finally {
@@ -74,6 +111,96 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
               Alert.alert('Success', 'API key cleared');
             } catch (error) {
               console.error('Error clearing API key:', error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleGitHubLogin = async () => {
+    setGithubLoading(true);
+    try {
+      const result = await loginWithGitHub();
+      if (result.success) {
+        setGithubConnected(true);
+        const username = await getGitHubUsername();
+        setGithubUsername(username);
+        Alert.alert('Success', 'Connected to GitHub!');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to connect');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to connect to GitHub');
+    } finally {
+      setGithubLoading(false);
+    }
+  };
+
+  const handleGitHubLogout = async () => {
+    Alert.alert(
+      'Disconnect GitHub',
+      'Are you sure you want to disconnect your GitHub account?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            await logoutFromGitHub();
+            setGithubConnected(false);
+            setGithubUsername(null);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleBackup = async () => {
+    if (!icloudAvailable) {
+      Alert.alert('Error', 'iCloud is not available on this device');
+      return;
+    }
+    
+    setBackupLoading(true);
+    try {
+      const result = await backupToICloud();
+      if (result.success) {
+        const backup = await getLastBackupTime();
+        setLastBackup(backup);
+        Alert.alert('Success', 'Backup completed!');
+      } else {
+        Alert.alert('Error', result.error || 'Backup failed');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Backup failed');
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    Alert.alert(
+      'Restore from iCloud',
+      'This will replace all local data with the backup. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          style: 'destructive',
+          onPress: async () => {
+            setBackupLoading(true);
+            try {
+              const result = await restoreFromICloud();
+              if (result.success) {
+                Alert.alert('Success', 'Restore completed! Please restart the app.');
+              } else {
+                Alert.alert('Error', result.error || 'Restore failed');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Restore failed');
+            } finally {
+              setBackupLoading(false);
             }
           },
         },
@@ -151,6 +278,106 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
             your content, and use AI to help edit your files.
           </Text>
           <Text style={styles.version}>Version 1.0.0</Text>
+        </View>
+
+        {/* GitHub Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>GitHub Sync</Text>
+          
+          <View style={styles.statusRow}>
+            <Ionicons name="logo-github" size={20} color="#333" />
+            <Text style={styles.statusLabel}>  Status:</Text>
+            <Text
+              style={[
+                styles.statusValue,
+                githubConnected ? styles.statusActive : styles.statusInactive,
+              ]}
+            >
+              {githubConnected ? `✓ ${githubUsername}` : '○ Not connected'}
+            </Text>
+          </View>
+
+          {githubConnected ? (
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => Alert.alert('Coming Soon', 'Repository sync is coming in a future update!')}
+              >
+                <Text style={styles.secondaryButtonText}>Select Repository</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={handleGitHubLogout}
+              >
+                <Text style={styles.clearButtonText}>Disconnect</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.saveButton, githubLoading && styles.saveButtonDisabled]}
+              onPress={handleGitHubLogin}
+              disabled={githubLoading}
+            >
+              {githubLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.saveButtonText}>Connect GitHub</Text>
+              )}
+            </TouchableOpacity>
+          )}
+
+          <Text style={styles.hint}>
+            Connect to import or sync your notes with a GitHub repository.
+          </Text>
+        </View>
+
+        {/* iCloud Backup Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>iCloud Backup</Text>
+          
+          <View style={styles.statusRow}>
+            <Ionicons name="cloud-outline" size={20} color="#007AFF" />
+            <Text style={styles.statusLabel}>  Status:</Text>
+            <Text
+              style={[
+                styles.statusValue,
+                icloudAvailable ? styles.statusActive : styles.statusInactive,
+              ]}
+            >
+              {icloudAvailable ? '✓ Available' : '○ Not available'}
+            </Text>
+          </View>
+
+          {lastBackup && (
+            <Text style={styles.hint}>
+              Last backup: {lastBackup.toLocaleDateString()} {lastBackup.toLocaleTimeString()}
+            </Text>
+          )}
+
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.saveButton, (!icloudAvailable || backupLoading) && styles.saveButtonDisabled]}
+              onPress={handleBackup}
+              disabled={!icloudAvailable || backupLoading}
+            >
+              {backupLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.saveButtonText}>Backup Now</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.secondaryButton, (!icloudAvailable || backupLoading) && styles.saveButtonDisabled]}
+              onPress={handleRestore}
+              disabled={!icloudAvailable || backupLoading}
+            >
+              <Text style={styles.secondaryButtonText}>Restore</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.hint}>
+            Back up all your notes, context files, chat history, and settings to iCloud.
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -271,5 +498,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#999',
     marginTop: 16,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  secondaryButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '600' as const,
   },
 });
