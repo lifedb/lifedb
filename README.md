@@ -1,34 +1,46 @@
 # LifeDB
 
-## Getting set up
-- Run ```python setup.py develop```
-- Run ```python bin/sync_conf.py```
-- Gmail
-    - Turn on the Gmail API [here](https://developers.google.com/gmail/api/quickstart/python)
-        - Set 'Where will you be calling the API from?' to 'Other UI (e.g., Windows, CLI tool)'
-    - Add GOOGLE_API_CLIENT_ID to ```./conf/conf.json```
-    - Add GOOGLE_API_CLIENT_SECRET to ```./conf/conf.json```
-    - Download JSON credentials to ```./conf/google.conf.json```
-    - Create a file ```./conf/google.auth.conf.json```
-    - Add GOOGLE_API_CLIENT_SECRET_FILEPATH to ```./conf/conf.json```
-    - Add GOOGLE_API_CLIENT_AUTH_FILEPATH set to ```./conf/google.auth.conf.json``` to ```./conf/conf.json```
-- Fitbit
-    - Register a new application [here](https://dev.fitbit.com)
-    - Set callback url to http://127.0.0.1:8080
-    - Copy over Client ID and Client Secret to appropriate values in ```conf.json```
-    - Run ./bin/fitbit_get_auth.py and copy over appropriate values to ```conf.json```
+A React Native app for context-aware file editing with Gemini AI integration.
 
-## TODO
-- Add Toggl API [link](https://github.com/toggl/toggl_api_docs)
-- Add Calendar
-- Add Transactions
-- Add GPS
-- Add Weather
-- Add Automatic
-- Add pushup/pullup
-- Add hour tracking
-- Add rescuetime
-- Create input abstraction
+## Features
 
-## Contributing
-- Add any package requirements to setup.py
+- 📁 **File Management** - Create, edit, and organize markdown files
+- 🤖 **Gemini AI** - Context-aware AI assistance for editing
+- 📝 **Markdown Preview** - Toggle between edit and preview modes
+- 💬 **Chat History** - View conversation logs with Gemini per file
+- 🔄 **CRDT Sync** - Conflict-free editing (foundation implemented)
+- ☁️ **Backup** - Local backup with restore capability
+- 🔗 **GitHub** - OAuth integration for repo sync (in progress)
+
+## Getting Started
+
+```bash
+npm install
+npx expo start
+```
+
+## Configuration
+
+### Gemini API Key
+Set your API key in the app's Settings screen.
+
+### GitHub OAuth (TODO)
+To enable GitHub sync:
+1. Create a GitHub OAuth App at https://github.com/settings/developers
+2. Set callback URL to: `https://auth.expo.io/@danielsuo/lifedb`
+3. Update `src/services/githubService.ts` with your credentials:
+   - `GITHUB_CLIENT_ID`
+   - `GITHUB_CLIENT_SECRET`
+
+> **TODO**: Move credentials to environment variables or implement GitHub Device Flow (no secret needed on device).
+
+## Deployment
+
+```bash
+./scripts/deploy.sh        # Local build + TestFlight
+./scripts/deploy.sh --cloud # EAS cloud build + TestFlight
+```
+
+## License
+
+Private
