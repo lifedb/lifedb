@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "ai.lifedb"
+      "bundleIdentifier": "com.danielsuo.lifedb"
     },
     "android": {
       "adaptiveIcon": {
