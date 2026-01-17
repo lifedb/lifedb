@@ -270,16 +270,6 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
           </Text>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About</Text>
-          <Text style={styles.aboutText}>
-            LifeDB is a file manager with integrated Gemini AI assistance.
-            Create folders and text files, add context to help Gemini understand
-            your content, and use AI to help edit your files.
-          </Text>
-          <Text style={styles.version}>Version 1.0.0</Text>
-        </View>
-
         {/* GitHub Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>GitHub Sync</Text>

@@ -8,6 +8,7 @@ import {
   Alert,
   TextInput,
   Modal,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,6 +37,7 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [renameItem, setRenameItem] = useState<FileItem | null>(null);
   const [renameName, setRenameName] = useState('');
+  const [showAboutModal, setShowAboutModal] = useState(false);
 
   const loadDirectory = useCallback(async () => {
     setIsLoading(true);
@@ -68,6 +70,16 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
     const folderName = path === '/' ? 'Files' : path.split('/').pop() || 'Files';
     navigation.setOptions({
       title: folderName,
+      headerLeft: () => (
+        path === '/' ? (
+          <TouchableOpacity
+            onPress={() => setShowAboutModal(true)}
+            style={styles.headerButton}
+          >
+            <Ionicons name="information-circle-outline" size={24} color="#007AFF" />
+          </TouchableOpacity>
+        ) : undefined
+      ),
       headerRight: () => (
         <View style={styles.headerButtons}>
           <TouchableOpacity
@@ -341,6 +353,37 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* About modal */}
+      <Modal
+        visible={showAboutModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowAboutModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.aboutOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAboutModal(false)}
+        >
+          <View style={styles.aboutContainer}>
+            <View style={styles.aboutHeader}>
+              <Ionicons name="leaf" size={40} color="#34C759" />
+              <Text style={styles.aboutTitle}>LifeDB</Text>
+              <Text style={styles.aboutVersion}>Version 1.0.0</Text>
+            </View>
+            <Text style={styles.aboutDescription}>
+              A file manager with integrated Gemini AI assistance. Create folders and text files, add context to help Gemini understand your content, and use AI to help edit your files.
+            </Text>
+            <TouchableOpacity
+              style={styles.aboutDismiss}
+              onPress={() => setShowAboutModal(false)}
+            >
+              <Text style={styles.aboutDismissText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -476,5 +519,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
     paddingVertical: 4,
+  },
+  aboutOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  aboutContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    margin: 32,
+    alignItems: 'center',
+    maxWidth: 320,
+  },
+  aboutHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  aboutTitle: {
+    fontSize: 24,
+    fontWeight: '700' as const,
+    marginTop: 8,
+    color: '#000',
+  },
+  aboutVersion: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  aboutDescription: {
+    fontSize: 15,
+    color: '#333',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  aboutDismiss: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 40,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  aboutDismissText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600' as const,
   },
 });

@@ -41,6 +41,7 @@ import {
   releaseDocument,
   initCrdtStorage,
 } from '../services/crdtSync';
+import { backupToICloud } from '../services/icloudBackup';
 import * as Y from 'yjs';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TextFile'>;
@@ -268,6 +269,9 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
       
       // Save CRDT state
       await saveCrdtState(path);
+      
+      // Auto-backup to iCloud (fire-and-forget)
+      backupToICloud().catch(err => console.log('Auto-backup failed:', err));
       
       lastSavedContent.current = newContent;
       await updateUndoRedoState();
