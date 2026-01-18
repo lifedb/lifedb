@@ -76,6 +76,13 @@ export const isGitHubAuthenticated = async (): Promise<boolean> => {
 };
 
 /**
+ * Get the stored GitHub access token
+ */
+export const getGitHubToken = async (): Promise<string | null> => {
+  return await SecureStore.getItemAsync(SECURE_STORE_KEY);
+};
+
+/**
  * Get stored GitHub username
  */
 export const getGitHubUsername = async (): Promise<string | null> => {

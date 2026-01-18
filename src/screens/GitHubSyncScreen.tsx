@@ -1,7 +1,7 @@
 /**
  * GitHub Sync Screen
  * 
- * Allows users to select a GitHub repository and sync their notes.
+ * Uses native SwiftGit2 module for real git clone/pull/push operations.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -13,33 +13,53 @@ import {
   FlatList,
   ActivityIndicator,
   Alert,
+  ScrollView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as FileSystem from 'expo-file-system';
 import { RootStackParamList } from '../types';
 import {
   isGitHubAuthenticated,
   listRepositories,
   getGitHubUsername,
+  getGitHubToken,
 } from '../services/githubService';
-import {
-  syncWithGitHub,
-  pushToGitHub,
-  pullFromGitHub,
-  getLastSyncTime,
-} from '../services/githubSyncService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Import native git module
+import LifeDBGit from 'lifedb-git';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GitHubSync'>;
 
 const SELECTED_REPO_KEY = 'github_selected_repo';
+const LAST_SYNC_KEY = 'github_last_sync';
 
 interface Repository {
   name: string;
   fullName: string;
   private: boolean;
 }
+
+// Get local repo path - uses Expo's document directory
+const getRepoPath = async (): Promise<string> => {
+  // Use the new Directory API
+  const { Paths, Directory } = await import('expo-file-system');
+  const reposDir = new Directory(Paths.document, 'repos');
+  const repoDir = new Directory(reposDir, 'lifedb');
+  
+  // Ensure the repos directory exists
+  if (!reposDir.exists) {
+    await reposDir.create();
+  }
+  
+  // Convert file:// URI to filesystem path for libgit2
+  const uri = repoDir.uri;
+  const path = uri.replace('file://', '');
+  return path;
+};
 
 export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
@@ -48,10 +68,26 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [gitOutput, setGitOutput] = useState<string[]>([]);
+  const [isNativeAvailable, setIsNativeAvailable] = useState(false);
+
+  const addGitOutput = (message: string) => {
+    setGitOutput(prev => [...prev.slice(-10), `${new Date().toLocaleTimeString()}: ${message}`]);
+  };
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Check if native module is available
+      try {
+        const available = LifeDBGit.isAvailable();
+        setIsNativeAvailable(available);
+        addGitOutput(`Native git module: ${available ? 'available' : 'not available'}`);
+      } catch {
+        setIsNativeAvailable(false);
+        addGitOutput('Native git module not available');
+      }
+
       const authenticated = await isGitHubAuthenticated();
       if (!authenticated) {
         Alert.alert('Not Connected', 'Please connect your GitHub account in Settings first.');
@@ -59,17 +95,21 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
         return;
       }
 
-      const [repos, user, savedRepo, syncTime] = await Promise.all([
+      const [repos, user, savedRepo, syncTimeStr] = await Promise.all([
         listRepositories(),
         getGitHubUsername(),
         AsyncStorage.getItem(SELECTED_REPO_KEY),
-        getLastSyncTime(),
+        AsyncStorage.getItem(LAST_SYNC_KEY),
       ]);
 
       setRepositories(repos);
       setUsername(user);
       setSelectedRepo(savedRepo);
-      setLastSync(syncTime);
+      setLastSync(syncTimeStr ? new Date(syncTimeStr) : null);
+
+      if (user) {
+        addGitOutput(`Logged in as: ${user}`);
+      }
     } catch (error) {
       console.error('Error loading repositories:', error);
       Alert.alert('Error', 'Failed to load repositories');
@@ -85,70 +125,179 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
   const handleSelectRepo = async (repo: Repository) => {
     await AsyncStorage.setItem(SELECTED_REPO_KEY, repo.fullName);
     setSelectedRepo(repo.fullName);
+    addGitOutput(`Selected repository: ${repo.fullName}`);
   };
 
-  const [syncProgress, setSyncProgress] = useState<{
-    phase: string;
-    current: number;
-    total: number;
-    currentFile?: string;
-  } | null>(null);
-
   const handleSync = async () => {
-    if (!selectedRepo) {
+    if (!selectedRepo || !username) {
       Alert.alert('No Repository', 'Please select a repository first.');
       return;
     }
-    
-    setIsSyncing(true);
-    setSyncProgress(null);
-    try {
-      const result = await syncWithGitHub((progress) => {
-        setSyncProgress(progress);
-      });
-      if (result.success) {
-        const syncTime = await getLastSyncTime();
-        setLastSync(syncTime);
-        Alert.alert(
-          'Sync Complete',
-          `Downloaded: ${result.filesDownloaded} files\nUploaded: ${result.filesUploaded} files`
-        );
-      } else {
-        Alert.alert('Sync Failed', result.error || 'Unknown error');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Sync failed');
-    } finally {
-      setIsSyncing(false);
-      setSyncProgress(null);
-    }
-  };
 
-  const handlePush = async () => {
-    if (!selectedRepo) return;
+    if (!isNativeAvailable) {
+      Alert.alert('Not Available', 'Native git is only available on iOS');
+      return;
+    }
+
+    const token = await getGitHubToken();
+    if (!token) {
+      Alert.alert('Error', 'No GitHub token found');
+      return;
+    }
+
     setIsSyncing(true);
+    setGitOutput([]);
+
     try {
-      const result = await pushToGitHub();
-      if (result.success) {
-        Alert.alert('Push Complete', `Uploaded ${result.filesUploaded} files to GitHub`);
+      const [owner, repo] = selectedRepo.split('/');
+      const repoPath = await getRepoPath();
+      const repoUrl = `https://github.com/${selectedRepo}.git`;
+
+      addGitOutput(`Starting sync for ${selectedRepo}...`);
+
+      // Check if repo already exists locally
+      const isRepo = await LifeDBGit.isRepository(repoPath);
+      
+      if (!isRepo) {
+        // Clone the repository
+        addGitOutput('Repository not found locally, cloning...');
+        const cloneResult = await LifeDBGit.clone(repoUrl, repoPath, username, token);
+        
+        if (cloneResult.success) {
+          addGitOutput('✓ Clone successful');
+        } else {
+          addGitOutput(`✗ Clone failed: ${cloneResult.error}`);
+          Alert.alert('Clone Failed', cloneResult.error || 'Unknown error');
+          return;
+        }
       } else {
-        Alert.alert('Push Failed', result.error || 'Unknown error');
+        // Pull latest changes
+        addGitOutput('Fetching latest changes...');
+        const pullResult = await LifeDBGit.pull(repoPath, username, token);
+        
+        if (pullResult.success) {
+          addGitOutput('✓ Pull successful');
+        } else {
+          addGitOutput(`✗ Pull failed: ${pullResult.error}`);
+        }
+
+        // Push local changes
+        addGitOutput('Pushing local changes...');
+        const pushResult = await LifeDBGit.push(
+          repoPath,
+          username,
+          token,
+          `Sync from LifeDB at ${new Date().toISOString()}`
+        );
+
+        if (pushResult.success) {
+          addGitOutput(`✓ Push successful${pushResult.commitOid ? ` (${pushResult.commitOid.substring(0, 7)})` : ''}`);
+        } else {
+          addGitOutput(`✗ Push failed: ${pushResult.error}`);
+        }
       }
+
+      // Update last sync time
+      const now = new Date();
+      await AsyncStorage.setItem(LAST_SYNC_KEY, now.toISOString());
+      setLastSync(now);
+      addGitOutput('Sync complete!');
+
+    } catch (error: any) {
+      addGitOutput(`✗ Error: ${error.message || 'Unknown error'}`);
+      Alert.alert('Sync Error', error.message || 'Unknown error');
     } finally {
       setIsSyncing(false);
     }
   };
 
   const handlePull = async () => {
-    if (!selectedRepo) return;
+    console.log('[handlePull] Starting...');
+    if (!selectedRepo || !username) {
+      console.log('[handlePull] Missing repo or username');
+      return;
+    }
+    
+    const token = await getGitHubToken();
+    if (!token) {
+      console.log('[handlePull] No token');
+      return;
+    }
+    
+    console.log('[handlePull] Setting syncing state');
     setIsSyncing(true);
+    
+    // Clear and set initial message
+    const initialMessage = `${new Date().toLocaleTimeString()}: Pulling from ${selectedRepo}...`;
+    console.log('[handlePull] Setting gitOutput:', initialMessage);
+    setGitOutput([initialMessage]);
+    
     try {
-      const result = await pullFromGitHub();
-      if (result.success) {
-        Alert.alert('Pull Complete', `Downloaded ${result.filesDownloaded} files from GitHub`);
-      } else {
+      const repoPath = await getRepoPath();
+      console.log('[handlePull] Repo path:', repoPath);
+      
+      console.log('[handlePull] Calling native pull...');
+      const result = await LifeDBGit.pull(repoPath, username, token);
+      console.log('[handlePull] Result:', JSON.stringify(result));
+      
+      const resultMessages = result.success 
+        ? [
+            `${new Date().toLocaleTimeString()}: ✓ Pull complete`,
+            `${new Date().toLocaleTimeString()}: ${result.message || 'Updated successfully'}`
+          ]
+        : [`${new Date().toLocaleTimeString()}: ✗ Pull failed: ${result.error}`];
+      
+      console.log('[handlePull] Appending messages:', resultMessages);
+      setGitOutput(prev => {
+        const newOutput = [...prev, ...resultMessages];
+        console.log('[handlePull] New gitOutput:', newOutput);
+        return newOutput;
+      });
+      
+      if (!result.success) {
         Alert.alert('Pull Failed', result.error || 'Unknown error');
       }
+    } catch (error: any) {
+      console.log('[handlePull] Error:', error);
+      setGitOutput(prev => [...prev, `${new Date().toLocaleTimeString()}: ✗ Error: ${error.message}`]);
+      Alert.alert('Error', error.message);
+    } finally {
+      console.log('[handlePull] Done');
+      setIsSyncing(false);
+    }
+  };
+
+  const handlePush = async () => {
+    if (!selectedRepo || !username) return;
+    
+    const token = await getGitHubToken();
+    if (!token) return;
+    
+    setIsSyncing(true);
+    setGitOutput([]); // Clear previous output
+    
+    try {
+      const repoPath = await getRepoPath();
+      addGitOutput(`Pushing to ${selectedRepo}...`);
+      addGitOutput(`Local path: ${repoPath}`);
+      
+      const result = await LifeDBGit.push(
+        repoPath,
+        username,
+        token,
+        `Update from LifeDB at ${new Date().toISOString()}`
+      );
+      
+      if (result.success) {
+        addGitOutput(`✓ Push complete${result.commitOid ? ` (${result.commitOid.substring(0, 7)})` : ''}`);
+        addGitOutput(result.message || 'Pushed successfully');
+      } else {
+        addGitOutput(`✗ Push failed: ${result.error}`);
+        Alert.alert('Push Failed', result.error || 'Unknown error');
+      }
+    } catch (error: any) {
+      addGitOutput(`✗ Error: ${error.message}`);
+      Alert.alert('Error', error.message);
     } finally {
       setIsSyncing(false);
     }
@@ -193,9 +342,9 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>GitHub Sync</Text>
+        <Text style={styles.headerTitle}>Git Sync</Text>
         <Text style={styles.headerSubtitle}>
-          Select a repository and sync your notes
+          {isNativeAvailable ? 'Using native git (SwiftGit2)' : 'Native git not available'}
         </Text>
         {username && (
           <View style={styles.userInfo}>
@@ -218,6 +367,26 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
         }
       />
 
+      {/* Git output console - always visible */}
+      <View style={styles.consoleContainer}>
+        <Text style={styles.consoleTitle}>Git Output</Text>
+        <ScrollView style={styles.console}>
+          {gitOutput.length === 0 ? (
+            <Text style={styles.consoleLine}>Ready for git operations...</Text>
+          ) : (
+            gitOutput.map((line, i) => (
+              <Text key={i} style={[
+                styles.consoleLine,
+                line.includes('✓') && styles.consoleSuccess,
+                line.includes('✗') && styles.consoleError,
+              ]}>
+                {line}
+              </Text>
+            ))
+          )}
+        </ScrollView>
+      </View>
+
       {selectedRepo && (
         <View style={styles.footer}>
           <Text style={styles.footerText}>
@@ -232,33 +401,31 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
           {isSyncing ? (
             <View style={styles.progressContainer}>
               <ActivityIndicator color="#007AFF" />
-              {syncProgress && (
-                <View style={styles.progressInfo}>
-                  <Text style={styles.progressText}>
-                    {syncProgress.phase === 'scanning' 
-                      ? 'Scanning repository...' 
-                      : `${syncProgress.phase === 'downloading' ? 'Downloading' : 'Uploading'}: ${syncProgress.current} / ${syncProgress.total}`
-                    }
-                  </Text>
-                  {syncProgress.currentFile && (
-                    <Text style={styles.progressFile} numberOfLines={1}>
-                      {syncProgress.currentFile}
-                    </Text>
-                  )}
-                </View>
-              )}
+              <Text style={styles.progressText}>Syncing...</Text>
             </View>
           ) : (
             <View style={styles.syncButtons}>
-              <TouchableOpacity style={styles.syncButton} onPress={handlePull}>
+              <TouchableOpacity 
+                style={[styles.syncButton, !isNativeAvailable && styles.syncButtonDisabled]} 
+                onPress={handlePull}
+                disabled={!isNativeAvailable}
+              >
                 <Ionicons name="cloud-download-outline" size={20} color="#fff" />
                 <Text style={styles.syncButtonText}>Pull</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.syncButton, styles.syncButtonPrimary]} onPress={handleSync}>
-                <Ionicons name="sync-outline" size={20} color="#fff" />
+              <TouchableOpacity 
+                style={[styles.syncButton, styles.syncButtonPrimary, !isNativeAvailable && styles.syncButtonDisabled]} 
+                onPress={handleSync}
+                disabled={!isNativeAvailable}
+              >
+                <Ionicons name="git-branch-outline" size={20} color="#fff" />
                 <Text style={styles.syncButtonText}>Sync</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.syncButton} onPress={handlePush}>
+              <TouchableOpacity 
+                style={[styles.syncButton, !isNativeAvailable && styles.syncButtonDisabled]} 
+                onPress={handlePush}
+                disabled={!isNativeAvailable}
+              >
                 <Ionicons name="cloud-upload-outline" size={20} color="#fff" />
                 <Text style={styles.syncButtonText}>Push</Text>
               </TouchableOpacity>
@@ -314,6 +481,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+    paddingBottom: 8,
   },
   repoItem: {
     flexDirection: 'row',
@@ -323,6 +491,11 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   repoItemSelected: {
     borderWidth: 2,
@@ -331,11 +504,10 @@ const styles = StyleSheet.create({
   repoInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
     gap: 12,
   },
   repoText: {
-    flex: 1,
+    gap: 2,
   },
   repoName: {
     fontSize: 16,
@@ -343,18 +515,46 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   repoOwner: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#666',
-    marginTop: 2,
   },
   emptyContainer: {
     alignItems: 'center',
-    paddingTop: 60,
+    justifyContent: 'center',
+    paddingVertical: 48,
   },
   emptyText: {
+    marginTop: 12,
     fontSize: 16,
     color: '#999',
-    marginTop: 12,
+  },
+  consoleContainer: {
+    backgroundColor: '#1a1a1a',
+    marginHorizontal: 16,
+    borderRadius: 8,
+    padding: 12,
+    maxHeight: 150,
+  },
+  consoleTitle: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#888',
+    marginBottom: 8,
+  },
+  console: {
+    flex: 1,
+  },
+  consoleLine: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: 11,
+    color: '#ccc',
+    marginBottom: 2,
+  },
+  consoleSuccess: {
+    color: '#34C759',
+  },
+  consoleError: {
+    color: '#FF3B30',
   },
   footer: {
     padding: 16,
@@ -377,51 +577,43 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
   },
-  syncingIndicator: {
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 16,
+    gap: 8,
+  },
+  progressText: {
+    fontSize: 14,
+    color: '#007AFF',
   },
   syncButtons: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
+    gap: 8,
     marginTop: 16,
   },
   syncButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#5856D6',
+    paddingVertical: 12,
+    borderRadius: 10,
     gap: 6,
-    backgroundColor: '#8E8E93',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
   },
   syncButtonPrimary: {
     backgroundColor: '#007AFF',
+  },
+  syncButtonDisabled: {
+    backgroundColor: '#ccc',
   },
   syncButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600' as const,
   },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    marginTop: 16,
-    paddingVertical: 8,
-  },
-  progressInfo: {
-    flex: 1,
-  },
-  progressText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '500' as const,
-  },
-  progressFile: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
 });
+
+export default GitHubSyncScreen;

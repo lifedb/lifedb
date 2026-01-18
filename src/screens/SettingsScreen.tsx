@@ -288,13 +288,9 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
           </View>
 
           {githubConnected ? (
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => navigation.navigate('GitHubSync')}
-              >
-                <Text style={styles.secondaryButtonText}>Select Repository</Text>
-              </TouchableOpacity>
+            <View style={styles.keyInfo}>
+              <Text style={styles.keyLabel}>Connected as:</Text>
+              <Text style={styles.keyValue}>{githubUsername}</Text>
               <TouchableOpacity
                 style={styles.clearButton}
                 onPress={handleGitHubLogout}
@@ -317,7 +313,7 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
           )}
 
           <Text style={styles.hint}>
-            Connect to import or sync your notes with a GitHub repository.
+            Connect your GitHub account to clone and sync repositories. Add GitHub repos from the Files screen using the + button.
           </Text>
         </View>
 

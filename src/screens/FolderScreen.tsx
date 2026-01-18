@@ -9,10 +9,13 @@ import {
   TextInput,
   Modal,
   ScrollView,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Paths, Directory } from 'expo-file-system';
 import { RootStackParamList, FileItem } from '../types';
 import { FileListItem } from '../components/FileListItem';
 import {
@@ -24,20 +27,48 @@ import {
   initializeFileSystem,
   rename,
 } from '../services/fileSystem';
+import { SyncLog } from '../services/gitSyncService';
+import { syncRepo, findGitRepoRoot } from '../services/gitService';
+import {
+  isGitHubAuthenticated,
+  listRepositories,
+  getGitHubUsername,
+  getGitHubToken,
+} from '../services/githubService';
+import LifeDBGit from 'lifedb-git';
+
+interface Repository {
+  name: string;
+  fullName: string;
+  private: boolean;
+}
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Folder'>;
 
 export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
   const { path } = route.params;
+  const isRootPath = !path || path === '/';
+  
   const [items, setItems] = useState<FileItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showNewModal, setShowNewModal] = useState(false);
-  const [newItemType, setNewItemType] = useState<'folder' | 'file'>('file');
+  const [newItemType, setNewItemType] = useState<'folder' | 'file' | 'github'>('file');
   const [newItemName, setNewItemName] = useState('');
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [renameItem, setRenameItem] = useState<FileItem | null>(null);
   const [renameName, setRenameName] = useState('');
   const [showAboutModal, setShowAboutModal] = useState(false);
+  
+  // Sync state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
+  
+  // GitHub repo selection state
+  const [githubRepos, setGithubRepos] = useState<Repository[]>([]);
+  const [isLoadingRepos, setIsLoadingRepos] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
 
   const loadDirectory = useCallback(async () => {
     setIsLoading(true);
@@ -52,6 +83,48 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
       setIsLoading(false);
     }
   }, [path]);
+
+  // Handle pull-to-refresh with context-aware sync
+  const handleRefresh = useCallback(async () => {
+    console.log('[handleRefresh] Starting... path:', path);
+    
+    // Check if we're inside a git repository
+    const repoRoot = await findGitRepoRoot(path);
+    console.log('[handleRefresh] Git repo root:', repoRoot);
+    
+    if (repoRoot) {
+      // We're in a git repo, do sync
+      console.log('[handleRefresh] Starting git sync...');
+      setIsSyncing(true);
+      setSyncLogs([]);
+      setShowSyncModal(true);
+      
+      const logs: SyncLog[] = [];
+      const result = await syncRepo(repoRoot, (message, status) => {
+        const newLog: SyncLog = { 
+          message, 
+          timestamp: new Date(),
+          operation: status === 'error' ? 'error' : 'info',
+          success: status !== 'error'
+        };
+        logs.push(newLog);
+        setSyncLogs([...logs]);
+      });
+      
+      console.log('[handleRefresh] Sync result:', result);
+      setIsSyncing(false);
+      // Modal stays open until user clicks Close
+    } else {
+      console.log('[handleRefresh] Not in a git repo, skipping sync');
+    }
+    
+    // Then reload directory
+    console.log('[handleRefresh] Reloading directory...');
+    await loadDirectory();
+    console.log('[handleRefresh] Done');
+  }, [path, loadDirectory]);
+
+
 
   useEffect(() => {
     loadDirectory();
@@ -166,6 +239,75 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
+  // Load GitHub repositories when switching to github type
+  const loadGitHubRepos = async () => {
+    console.log('[GitHub] Starting to load repos');
+    setIsLoadingRepos(true);
+    try {
+      const isAuth = await isGitHubAuthenticated();
+      console.log('[GitHub] Auth check:', isAuth);
+      if (!isAuth) {
+        Alert.alert('Not Connected', 'Please connect your GitHub account in Settings first.');
+        setNewItemType('file');
+        return;
+      }
+      const repos = await listRepositories();
+      console.log('[GitHub] Loaded repos:', repos.length);
+      setGithubRepos(repos);
+      if (repos.length === 0) {
+        Alert.alert('No Repositories', 'No GitHub repositories found. Make sure you have repositories and try again.');
+      }
+    } catch (error) {
+      console.error('Error loading repos:', error);
+      Alert.alert('Error', 'Failed to load GitHub repositories');
+    } finally {
+      setIsLoadingRepos(false);
+    }
+  };
+
+  // Clone a GitHub repository to the root directory
+  const handleCloneRepo = async (repo: Repository) => {
+    setIsCloning(true);
+    try {
+      const username = await getGitHubUsername();
+      const token = await getGitHubToken();
+      
+      if (!username || !token) {
+        Alert.alert('Error', 'GitHub credentials not found');
+        return;
+      }
+
+      // Create repo path in the lifedb directory
+      const baseDir = new Directory(Paths.document, 'lifedb');
+      const repoDir = new Directory(baseDir, repo.name);
+      const repoPath = repoDir.uri.replace('file://', '');
+      const repoUrl = `https://github.com/${repo.fullName}.git`;
+
+      // Check if directory already exists
+      if (repoDir.exists) {
+        Alert.alert('Error', `A folder named "${repo.name}" already exists`);
+        return;
+      }
+
+      // Clone the repository
+      const result = await LifeDBGit.clone(repoUrl, repoPath, username, token);
+      
+      if (result.success) {
+        Alert.alert('Success', `Cloned ${repo.name} successfully!`);
+        setShowNewModal(false);
+        setNewItemType('file');
+        loadDirectory();
+      } else {
+        Alert.alert('Clone Failed', result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error('Error cloning:', error);
+      Alert.alert('Error', 'Failed to clone repository');
+    } finally {
+      setIsCloning(false);
+    }
+  };
+
   const handleRename = (item: FileItem) => {
     setRenameItem(item);
     setRenameName(item.name);
@@ -211,8 +353,8 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
         data={items}
         renderItem={renderItem}
         keyExtractor={(item) => item.path}
-        refreshing={isLoading}
-        onRefresh={loadDirectory}
+        refreshing={isLoading || isSyncing}
+        onRefresh={handleRefresh}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="folder-open-outline" size={64} color="#C7C7CC" />
@@ -242,13 +384,17 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowNewModal(false)}>
+            <TouchableOpacity onPress={() => { setShowNewModal(false); setNewItemType('file'); }}>
               <Text style={styles.modalCancel}>Cancel</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>New Item</Text>
-            <TouchableOpacity onPress={handleCreateNew}>
-              <Text style={styles.modalDone}>Create</Text>
-            </TouchableOpacity>
+            {newItemType !== 'github' ? (
+              <TouchableOpacity onPress={handleCreateNew}>
+                <Text style={styles.modalDone}>Create</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 50 }} />
+            )}
           </View>
 
           <View style={styles.modalContent}>
@@ -295,19 +441,84 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
                   Folder
                 </Text>
               </TouchableOpacity>
+              {isRootPath && (
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    newItemType === 'github' && styles.typeButtonActive,
+                  ]}
+                  onPress={() => {
+                    setNewItemType('github');
+                    loadGitHubRepos();
+                  }}
+                >
+                  <Ionicons
+                    name="logo-github"
+                    size={32}
+                    color={newItemType === 'github' ? '#007AFF' : '#8E8E93'}
+                  />
+                  <Text
+                    style={[
+                      styles.typeLabel,
+                      newItemType === 'github' && styles.typeLabelActive,
+                    ]}
+                  >
+                    GitHub
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
-            <TextInput
-              style={styles.nameInput}
-              value={newItemName}
-              onChangeText={setNewItemName}
-              placeholder={newItemType === 'folder' ? 'Folder name' : 'File name'}
-              placeholderTextColor="#999"
-              autoFocus={true}
-              autoCapitalize="none"
-              returnKeyType="done"
-              onSubmitEditing={handleCreateNew}
-            />
+            {newItemType === 'github' ? (
+              <View style={styles.repoList}>
+                {isLoadingRepos ? (
+                  <View style={styles.repoLoading}>
+                    <ActivityIndicator size="large" color="#007AFF" />
+                    <Text style={styles.repoLoadingText}>Loading repositories...</Text>
+                  </View>
+                ) : isCloning ? (
+                  <View style={styles.repoLoading}>
+                    <ActivityIndicator size="large" color="#007AFF" />
+                    <Text style={styles.repoLoadingText}>Cloning repository...</Text>
+                  </View>
+                ) : (
+                  <ScrollView>
+                    {githubRepos.map((repo) => (
+                      <TouchableOpacity
+                        key={repo.fullName}
+                        style={styles.repoItem}
+                        onPress={() => handleCloneRepo(repo)}
+                      >
+                        <View style={styles.repoInfo}>
+                          <Ionicons
+                            name={repo.private ? 'lock-closed-outline' : 'globe-outline'}
+                            size={20}
+                            color="#666"
+                          />
+                          <View style={styles.repoText}>
+                            <Text style={styles.repoName}>{repo.name}</Text>
+                            <Text style={styles.repoOwner}>{repo.fullName}</Text>
+                          </View>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color="#c7c7cc" />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            ) : (
+              <TextInput
+                style={styles.nameInput}
+                value={newItemName}
+                onChangeText={setNewItemName}
+                placeholder={newItemType === 'folder' ? 'Folder name' : 'File name'}
+                placeholderTextColor="#999"
+                autoFocus={true}
+                autoCapitalize="none"
+                returnKeyType="done"
+                onSubmitEditing={handleCreateNew}
+              />
+            )}
           </View>
         </SafeAreaView>
       </Modal>
@@ -384,7 +595,63 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Sync Modal */}
+      <Modal
+        visible={showSyncModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowSyncModal(false)}
+      >
+        <View style={styles.syncModalOverlay}>
+          <View style={styles.syncModalContent}>
+            <View style={styles.syncModalHeader}>
+              <Ionicons name="git-branch" size={24} color="#007AFF" />
+              <Text style={styles.syncModalTitle}>Git Sync</Text>
+              {isSyncing && <ActivityIndicator size="small" color="#007AFF" style={{ marginLeft: 8 }} />}
+            </View>
+            <ScrollView style={styles.syncLogContainer}>
+              {syncLogs.map((log, index) => (
+                <View key={index} style={styles.syncLogRow}>
+                  <Ionicons 
+                    name={
+                      log.operation === 'error' ? 'close-circle' : 
+                      log.operation === 'info' ? 'information-circle' :
+                      log.success === true ? 'checkmark-circle' :
+                      log.success === false ? 'close-circle' : 'sync'
+                    } 
+                    size={16} 
+                    color={
+                      log.operation === 'error' || log.success === false ? '#FF3B30' : 
+                      log.success === true ? '#34C759' : '#007AFF'
+                    } 
+                  />
+                  <Text style={[
+                    styles.syncLogText,
+                    log.operation === 'error' && styles.syncLogError,
+                    log.success === true && styles.syncLogSuccess,
+                  ]}>
+                    {log.message}
+                  </Text>
+                </View>
+              ))}
+              {syncLogs.length === 0 && isSyncing && (
+                <Text style={styles.syncLogText}>Connecting...</Text>
+              )}
+            </ScrollView>
+            {!isSyncing && (
+              <TouchableOpacity
+                style={styles.syncModalDismiss}
+                onPress={() => setShowSyncModal(false)}
+              >
+                <Text style={styles.syncModalDismissText}>Close</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
+
   );
 };
 
@@ -467,6 +734,7 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
   },
   modalContent: {
+    flex: 1,
     padding: 16,
   },
   typeSelector: {
@@ -567,4 +835,112 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600' as const,
   },
+  // Sync Modal Styles
+  syncModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  syncModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '60%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  syncModalHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  syncModalTitle: {
+    fontSize: 18,
+    fontWeight: '600' as const,
+    marginLeft: 8,
+    color: '#000',
+  },
+  syncLogContainer: {
+    maxHeight: 200,
+    marginBottom: 16,
+  },
+  syncLogRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    paddingVertical: 4,
+  },
+  syncLogText: {
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 8,
+    flex: 1,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  syncLogError: {
+    color: '#FF3B30',
+  },
+  syncLogSuccess: {
+    color: '#34C759',
+  },
+  syncModalDismiss: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  syncModalDismissText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600' as const,
+  },
+  // GitHub repo styles
+  repoList: {
+    flex: 1,
+    marginTop: 16,
+  },
+  repoLoading: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  repoLoadingText: {
+    marginTop: 12,
+    color: '#666',
+    fontSize: 14,
+  },
+  repoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e0e0e0',
+  },
+  repoInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  repoText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  repoName: {
+    fontSize: 16,
+    fontWeight: '500' as const,
+    color: '#1a1a1a',
+  },
+  repoOwner: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
 });
+

@@ -31,18 +31,9 @@ import {
   initializeDiffStorage,
 } from '../services/diffTracker';
 import { addConversation, getChatMessages, ChatMessage } from '../services/chatLog';
-import {
-  getDocument,
-  getText,
-  initializeWithContent,
-  saveState as saveCrdtState,
-  getContent as getCrdtContent,
-  onDocumentChange,
-  releaseDocument,
-  initCrdtStorage,
-} from '../services/crdtSync';
 import { backupToICloud } from '../services/icloudBackup';
-import * as Y from 'yjs';
+import { commitIfInRepo } from '../services/gitService';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TextFile'>;
 
@@ -145,32 +136,17 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
   const [contextPreview, setContextPreview] = useState('');
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedContent = useRef('');
-  const ydocRef = useRef<Y.Doc | null>(null);
 
   const loadFile = useCallback(async () => {
     setIsLoading(true);
     try {
       await initializeDiffStorage();
-      await initCrdtStorage();
       
-      // Load file content
+      // Load file content directly
       const fileContent = await readTextFile(path);
-      
-      // Initialize CRDT document
-      const doc = await getDocument(path);
-      ydocRef.current = doc;
-      
-      // If CRDT doc is empty, initialize with file content
-      const ytext = getText(doc);
-      if (ytext.length === 0 && fileContent.length > 0) {
-        initializeWithContent(doc, fileContent);
-      }
-      
-      // Use CRDT content as source of truth
-      const crdtContent = getCrdtContent(doc);
-      setContent(crdtContent);
-      setOriginalContent(crdtContent);
-      lastSavedContent.current = crdtContent;
+      setContent(fileContent);
+      setOriginalContent(fileContent);
+      lastSavedContent.current = fileContent;
       
       // Load context preview
       const context = await getAggregatedContext(path);
@@ -267,11 +243,14 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
       await recordChange(path, lastSavedContent.current, newContent, 'user');
       await writeTextFile(path, newContent);
       
-      // Save CRDT state
-      await saveCrdtState(path);
-      
       // Auto-backup to iCloud (fire-and-forget)
       backupToICloud().catch(err => console.log('Auto-backup failed:', err));
+      
+      // Auto-commit to git if in a repo (fire-and-forget)
+      const fileName = path.split('/').pop() || 'file';
+      commitIfInRepo(path, `Update ${fileName}`).catch(err => 
+        console.log('Auto-commit failed:', err)
+      );
       
       lastSavedContent.current = newContent;
       await updateUndoRedoState();
@@ -282,16 +261,6 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const handleContentChange = (newContent: string) => {
     setContent(newContent);
-    
-    // Update CRDT document
-    if (ydocRef.current) {
-      const ytext = getText(ydocRef.current);
-      // Replace all content with new content
-      ydocRef.current.transact(() => {
-        ytext.delete(0, ytext.length);
-        ytext.insert(0, newContent);
-      });
-    }
     
     // Debounce save
     if (saveTimeoutRef.current) {
