@@ -107,6 +107,7 @@ export const loginWithGitHub = async (): Promise<{ success: boolean; error?: str
       clientId: GITHUB_CLIENT_ID,
       scopes: ['repo', 'user'],
       redirectUri,
+      usePKCE: false, // GitHub OAuth Apps don't support PKCE
     });
 
     // Use useProxy for Expo Go development
