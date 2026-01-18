@@ -82,30 +82,23 @@ export const EditContextScreen: React.FC<Props> = ({ navigation, route }) => {
     });
   }, [navigation, path, isDirectory, hasChanges]);
 
+  const placeholderText = `This context will be included when prompting Gemini for ${isDirectory ? 'files in this directory' : 'this file'}.
+
+Examples:
+- Project description
+- Coding conventions  
+- File purpose
+- Relevant background information`;
+
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.pathLabel}>
-          {isDirectory ? 'Directory' : 'File'}: {path}
-        </Text>
-        <Text style={styles.hint}>
-          This context will be included when prompting Gemini for{' '}
-          {isDirectory ? 'files in this directory' : 'this file'}.
-        </Text>
-      </View>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
       <TextInput
         style={styles.editor}
         value={content}
         onChangeText={setContent}
         multiline={true}
         textAlignVertical="top"
-        placeholder="Add context information here...
-
-Examples:
-- Project description
-- Coding conventions
-- File purpose
-- Relevant background information"
+        placeholder={placeholderText}
         placeholderTextColor="#999"
         editable={!isLoading}
       />

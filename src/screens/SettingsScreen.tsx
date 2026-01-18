@@ -8,7 +8,10 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from 'react-native';
+
+const GeminiLogo = require('../../assets/gemini.png');
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -209,128 +212,145 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Gemini API</Text>
-          
-          <View style={styles.statusRow}>
-            <Text style={styles.statusLabel}>Status:</Text>
-            <Text
-              style={[
-                styles.statusValue,
-                savedApiKey ? styles.statusActive : styles.statusInactive,
-              ]}
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <View style={[styles.section, { marginTop: 0 }]}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Gemini API</Text>
+            <TouchableOpacity
+              style={styles.infoButton}
+              onPress={() => Alert.alert(
+                'Gemini API',
+                'Get your API key from aistudio.google.com'
+              )}
             >
-              {savedApiKey ? '✓ Connected' : '○ Not configured'}
-            </Text>
+              <Ionicons name="information-circle-outline" size={22} color="#007AFF" />
+            </TouchableOpacity>
           </View>
-
+          
           {savedApiKey ? (
-            <View style={styles.keyInfo}>
-              <Text style={styles.keyLabel}>Current key:</Text>
-              <Text style={styles.keyValue}>
+            <View style={styles.statusRow}>
+              <Image source={GeminiLogo} style={{ width: 18, height: 18 }} />
+              <Text style={[styles.statusValue, styles.statusActive]}>
                 {savedApiKey.slice(0, 8)}...{savedApiKey.slice(-4)}
               </Text>
+              <View style={{ flex: 1 }} />
               <TouchableOpacity
-                style={styles.clearButton}
+                style={styles.removeButton}
                 onPress={handleClearApiKey}
               >
-                <Text style={styles.clearButtonText}>Remove Key</Text>
+                <Text style={styles.removeButtonText}>Remove</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                value={apiKey}
-                onChangeText={setApiKeyState}
-                placeholder="Enter Gemini API key"
-                placeholderTextColor="#999"
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry={true}
-              />
-              <TouchableOpacity
-                style={[
-                  styles.saveButton,
-                  !apiKey.trim() && styles.saveButtonDisabled,
-                ]}
-                onPress={handleSaveApiKey}
-                disabled={!apiKey.trim()}
-              >
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
+            <>
+              <View style={styles.statusRow}>
+                <Image source={GeminiLogo} style={{ width: 18, height: 18, opacity: 0.4 }} />
+                <Text style={[styles.statusValue, styles.statusInactive, { fontWeight: '600' }]}>
+                  Not Configured
+                </Text>
+              </View>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  value={apiKey}
+                  onChangeText={setApiKeyState}
+                  placeholder="Enter Gemini API key"
+                  placeholderTextColor="#999"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry={true}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.connectButton,
+                    !apiKey.trim() && styles.saveButtonDisabled,
+                  ]}
+                  onPress={handleSaveApiKey}
+                  disabled={!apiKey.trim()}
+                >
+                  <Text style={styles.connectButtonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </>
           )}
-
-          <Text style={styles.hint}>
-            Get your API key from{' '}
-            <Text style={styles.link}>aistudio.google.com</Text>
-          </Text>
         </View>
 
         {/* GitHub Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>GitHub Sync</Text>
-          
-          <View style={styles.statusRow}>
-            <Ionicons name="logo-github" size={20} color="#333" />
-            <Text style={styles.statusLabel}>  Status:</Text>
-            <Text
-              style={[
-                styles.statusValue,
-                githubConnected ? styles.statusActive : styles.statusInactive,
-              ]}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>GitHub Sync</Text>
+            <TouchableOpacity
+              style={styles.infoButton}
+              onPress={() => Alert.alert(
+                'GitHub Sync',
+                'Connect your GitHub account to clone and sync repositories. Add GitHub repos from the Files screen using the + button.'
+              )}
             >
-              {githubConnected ? `✓ ${githubUsername}` : '○ Not connected'}
-            </Text>
+              <Ionicons name="information-circle-outline" size={22} color="#007AFF" />
+            </TouchableOpacity>
           </View>
-
+          
           {githubConnected ? (
-            <View style={styles.keyInfo}>
-              <Text style={styles.keyLabel}>Connected as:</Text>
-              <Text style={styles.keyValue}>{githubUsername}</Text>
+            <View style={styles.statusRow}>
+              <Ionicons name="logo-github" size={20} color="#333" />
+              <Text style={[styles.statusValue, styles.statusActive]}>
+                Connected to {githubUsername}
+              </Text>
+              <View style={{ flex: 1 }} />
               <TouchableOpacity
-                style={styles.clearButton}
+                style={styles.removeButton}
                 onPress={handleGitHubLogout}
               >
-                <Text style={styles.clearButtonText}>Disconnect</Text>
+                <Text style={styles.removeButtonText}>Disconnect</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity
-              style={[styles.saveButton, githubLoading && styles.saveButtonDisabled]}
-              onPress={handleGitHubLogin}
-              disabled={githubLoading}
-            >
-              {githubLoading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.saveButtonText}>Connect GitHub</Text>
-              )}
-            </TouchableOpacity>
+            <View style={styles.statusRow}>
+              <Ionicons name="logo-github" size={20} color="#999" />
+              <Text style={[styles.statusValue, styles.statusInactive, { fontWeight: '600' }]}>
+                Not Connected
+              </Text>
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity
+                style={styles.connectButton}
+                onPress={handleGitHubLogin}
+                disabled={githubLoading}
+              >
+                {githubLoading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.connectButtonText}>Connect</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           )}
-
-          <Text style={styles.hint}>
-            Connect your GitHub account to clone and sync repositories. Add GitHub repos from the Files screen using the + button.
-          </Text>
         </View>
 
         {/* iCloud Backup Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>iCloud Backup</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>iCloud Backup</Text>
+            <TouchableOpacity
+              style={styles.infoButton}
+              onPress={() => Alert.alert(
+                'iCloud Backup',
+                'Your notes, context files, chat history, and settings are automatically backed up to iCloud on every save. Use Backup Now for an immediate backup or Restore to recover from iCloud.'
+              )}
+            >
+              <Ionicons name="information-circle-outline" size={22} color="#007AFF" />
+            </TouchableOpacity>
+          </View>
           
           <View style={styles.statusRow}>
             <Ionicons name="cloud-outline" size={20} color="#007AFF" />
-            <Text style={styles.statusLabel}>  Status:</Text>
             <Text
               style={[
                 styles.statusValue,
                 icloudAvailable ? styles.statusActive : styles.statusInactive,
               ]}
             >
-              {icloudAvailable ? '✓ Available' : '○ Not available'}
+              {icloudAvailable ? 'Available' : 'Not available'}
             </Text>
           </View>
 
@@ -360,10 +380,6 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
               <Text style={styles.secondaryButtonText}>Restore</Text>
             </TouchableOpacity>
           </View>
-
-          <Text style={styles.hint}>
-            Back up all your notes, context files, chat history, and settings to iCloud.
-          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -373,26 +389,32 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F2F2F7',
   },
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
   section: {
     backgroundColor: '#fff',
-    marginTop: 24,
+    marginHorizontal: 16,
+    marginBottom: 24,
+    borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e0e0e0',
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 1,
   },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '600' as const,
     color: '#666',
     textTransform: 'uppercase',
-    marginBottom: 16,
   },
   statusRow: {
     flexDirection: 'row',
@@ -441,6 +463,9 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
     marginBottom: 12,
   },
   input: {
@@ -452,11 +477,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   saveButton: {
-    marginLeft: 12,
+    flex: 1,
     backgroundColor: '#007AFF',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    padding: 12,
     borderRadius: 8,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   saveButtonDisabled: {
@@ -500,6 +525,65 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: '#007AFF',
     fontSize: 16,
+    fontWeight: '600' as const,
+  },
+  connectedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  connectedText: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: '#007AFF',
+  },
+  connectedCard: {
+    backgroundColor: '#f8f8f8',
+    padding: 12,
+    borderRadius: 8,
+  },
+  connectedHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  removeButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#FF3B30',
+  },
+  removeButtonText: {
+    color: '#FF3B30',
+    fontSize: 14,
+    fontWeight: '500' as const,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  infoButton: {
+    padding: 4,
+  },
+  geminiIcon: {
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
+  },
+  connectButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: '#007AFF',
+  },
+  connectButtonText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600' as const,
   },
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface UndoControlsProps {
@@ -7,8 +7,9 @@ interface UndoControlsProps {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
-  historyCount?: number;
-  currentIndex?: number;
+  showChat?: boolean;
+  onChatPress?: () => void;
+  statusContent?: React.ReactNode;
 }
 
 export const UndoControls: React.FC<UndoControlsProps> = ({
@@ -16,50 +17,54 @@ export const UndoControls: React.FC<UndoControlsProps> = ({
   canRedo,
   onUndo,
   onRedo,
-  historyCount,
-  currentIndex,
+  showChat,
+  onChatPress,
+  statusContent,
 }) => {
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={[styles.button, !canUndo && styles.buttonDisabled]}
-        onPress={onUndo}
-        disabled={!canUndo}
-      >
-        <View style={styles.buttonContent}>
+      <View style={styles.leftButtons}>
+        <TouchableOpacity
+          style={[styles.button, !canUndo && styles.buttonDisabled]}
+          onPress={onUndo}
+          disabled={!canUndo}
+        >
           <Ionicons
             name="arrow-undo"
-            size={16}
-            color={canUndo ? '#007AFF' : '#999'}
+            size={22}
+            color={canUndo ? '#007AFF' : '#C7C7CC'}
           />
-          <Text style={[styles.buttonText, !canUndo && styles.textDisabled]}>
-            Undo
-          </Text>
-        </View>
-      </TouchableOpacity>
-      
-      {historyCount !== undefined && currentIndex !== undefined && historyCount > 0 && (
-        <Text style={styles.counter}>
-          {currentIndex + 1}/{historyCount}
-        </Text>
-      )}
-      
-      <TouchableOpacity
-        style={[styles.button, !canRedo && styles.buttonDisabled]}
-        onPress={onRedo}
-        disabled={!canRedo}
-      >
-        <View style={styles.buttonContent}>
-          <Text style={[styles.buttonText, !canRedo && styles.textDisabled]}>
-            Redo
-          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.button, !canRedo && styles.buttonDisabled]}
+          onPress={onRedo}
+          disabled={!canRedo}
+        >
           <Ionicons
             name="arrow-redo"
-            size={16}
-            color={canRedo ? '#007AFF' : '#999'}
+            size={22}
+            color={canRedo ? '#007AFF' : '#C7C7CC'}
           />
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.centerContent}>
+        {statusContent}
+      </View>
+
+      {onChatPress && (
+        <TouchableOpacity
+          style={[styles.chatButton, showChat && styles.chatButtonActive]}
+          onPress={onChatPress}
+        >
+          <Ionicons
+            name="chatbubbles-outline"
+            size={22}
+            color="#007AFF"
+          />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -68,41 +73,35 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: '#f8f8f8',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#e0e0e0',
   },
-  button: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#007AFF',
-  },
-  buttonDisabled: {
-    borderColor: '#C7C7CC',
-    backgroundColor: '#f0f0f0',
-  },
-  buttonContent: {
+  leftButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 12,
+    zIndex: 1,
   },
-  buttonText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '500' as const,
+  centerContent: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  textDisabled: {
-    color: '#999',
+  button: {
+    padding: 6,
   },
-  counter: {
-    marginHorizontal: 16,
-    fontSize: 12,
-    color: '#8E8E93',
+  buttonDisabled: {
+    opacity: 0.4,
+  },
+  chatButton: {
+    padding: 6,
+    zIndex: 1,
+  },
+  chatButtonActive: {
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    borderRadius: 8,
   },
 });

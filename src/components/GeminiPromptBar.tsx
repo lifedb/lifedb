@@ -5,8 +5,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Image,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+
+const GeminiLogo = require('../../assets/gemini.png');
 
 interface GeminiPromptBarProps {
   onSubmit: (prompt: string) => Promise<void>;
@@ -61,7 +63,7 @@ export const GeminiPromptBar: React.FC<GeminiPromptBarProps> = ({
         {isLoading ? (
           <ActivityIndicator size="small" color="#fff" />
         ) : (
-          <Ionicons name="sparkles" size={22} color="#fff" />
+          <Image source={GeminiLogo} style={styles.geminiIcon} />
         )}
       </TouchableOpacity>
     </View>
@@ -71,12 +73,10 @@ export const GeminiPromptBar: React.FC<GeminiPromptBarProps> = ({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 12,
+    alignItems: 'center',
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#f8f8f8',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#e0e0e0',
+    paddingBottom: 34,
   },
   inputContainer: {
     flex: 1,
@@ -85,28 +85,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     paddingHorizontal: 16,
-    paddingVertical: 8,
     minHeight: 40,
     maxHeight: 100,
+    justifyContent: 'center',
   },
   input: {
     fontSize: 16,
     color: '#1a1a1a',
     maxHeight: 80,
+    textAlignVertical: 'center',
+    paddingVertical: 8,
   },
   button: {
     marginLeft: 8,
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonDisabled: {
-    backgroundColor: '#ccc',
+    opacity: 0.4,
   },
   buttonText: {
     fontSize: 20,
+  },
+  geminiIcon: {
+    width: 26,
+    height: 26,
+    resizeMode: 'contain',
   },
 });

@@ -1,5 +1,6 @@
 import { AggregatedContext } from '../types';
 import { getFileContext, getDirectoryContext } from './fileSystem';
+import { ChatMessage } from './chatLog';
 
 /**
  * Get all ancestor directory paths for a given file path
@@ -72,24 +73,46 @@ export const formatContextForDisplay = (context: AggregatedContext): string => {
 };
 
 /**
- * Build system prompt for Gemini including all context
+ * Build system prompt for Gemini including all context as markdown
+ * Format: User Context → Document → Chat History
  */
-export const buildSystemPrompt = (context: AggregatedContext, fileContent: string): string => {
+export const buildSystemPrompt = (
+  context: AggregatedContext,
+  fileContent: string,
+  chatHistory?: ChatMessage[]
+): string => {
   const parts: string[] = [];
   
   parts.push('You are an AI assistant helping the user edit a text file.');
   parts.push('');
   
+  // Section 1: User Context (explicit context defined by user)
+  parts.push('# User Context');
   if (context.fullContextString.trim()) {
-    parts.push('## Context Information');
     parts.push(context.fullContextString);
-    parts.push('');
+  } else {
+    parts.push('*No user context defined.*');
   }
+  parts.push('');
   
-  parts.push('## Current File Content');
+  // Section 2: Current Document
+  parts.push('# Current Document');
   parts.push('```');
   parts.push(fileContent);
   parts.push('```');
+  parts.push('');
+  
+  // Section 3: Chat History (if any)
+  if (chatHistory && chatHistory.length > 0) {
+    parts.push('# Chat History');
+    for (const msg of chatHistory) {
+      const role = msg.role === 'user' ? 'User' : 'Assistant';
+      parts.push(`**${role}:** ${msg.content}`);
+      parts.push('');
+    }
+  }
+  
+  parts.push('---');
   parts.push('');
   parts.push('When responding, provide the complete updated file content that should replace the current content.');
   parts.push('If the user asks a question, answer it and then provide any suggested edits to the file if applicable.');

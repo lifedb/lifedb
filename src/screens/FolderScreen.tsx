@@ -140,26 +140,37 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // Set up header
   useEffect(() => {
-    const folderName = path === '/' ? 'Files' : path.split('/').pop() || 'Files';
+    // Get the current folder name for title
+    const folderName = path === '/' ? 'Files' : path.split('/').filter(Boolean).pop() || 'Files';
+    
+    // Get the parent folder name for back button
+    const pathParts = path.split('/').filter(Boolean);
+    const parentName = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Files';
+    
     navigation.setOptions({
       title: folderName,
+      // On root: show settings gear on the left
+      // On nested: show back button with parent name
       headerLeft: () => (
         path === '/' ? (
-          <TouchableOpacity
-            onPress={() => setShowAboutModal(true)}
-            style={styles.headerButton}
-          >
-            <Ionicons name="information-circle-outline" size={24} color="#007AFF" />
-          </TouchableOpacity>
-        ) : undefined
-      ),
-      headerRight: () => (
-        <View style={styles.headerButtons}>
           <TouchableOpacity
             onPress={() => navigation.navigate('Settings')}
             style={styles.headerButton}
           >
             <Ionicons name="settings-outline" size={24} color="#007AFF" />
+          </TouchableOpacity>
+        ) : undefined
+      ),
+      // Set custom back title for nested pages
+      headerBackTitle: parentName,
+      // Right side: folder context (i) and add (+)
+      headerRight: () => (
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('EditContext', { path, isDirectory: true })}
+            style={styles.headerButton}
+          >
+            <Ionicons name="information-circle-outline" size={24} color="#007AFF" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => {
@@ -168,7 +179,7 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
             }}
             style={styles.headerButton}
           >
-            <Ionicons name="add" size={28} color="#007AFF" />
+            <Ionicons name="add" size={24} color="#007AFF" />
           </TouchableOpacity>
         </View>
       ),
@@ -348,13 +359,15 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
       <FlatList
         data={items}
         renderItem={renderItem}
         keyExtractor={(item) => item.path}
         refreshing={isLoading || isSyncing}
         onRefresh={handleRefresh}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="folder-open-outline" size={64} color="#C7C7CC" />
@@ -363,17 +376,6 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
         }
       />
-
-      {/* Edit folder context button */}
-      <TouchableOpacity
-        style={styles.contextButton}
-        onPress={() => navigation.navigate('EditContext', { path, isDirectory: true })}
-      >
-        <View style={styles.contextButtonContent}>
-          <Ionicons name="information-circle-outline" size={20} color="#007AFF" />
-          <Text style={styles.contextButtonText}>Folder Context</Text>
-        </View>
-      </TouchableOpacity>
 
       {/* New item modal */}
       <Modal
@@ -658,13 +660,22 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#fff',
+  },
+  list: {
+    flex: 1,
+  },
+  listContent: {
+    backgroundColor: '#fff',
   },
   headerButtons: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   headerButton: {
-    marginLeft: 16,
+    // Padding is ~25% of icon size (24pt) to visually center within iOS nav pill
+    paddingHorizontal: 6,
   },
   headerButtonText: {
     fontSize: 22,

@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["LifeDBGitModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.lifedbgit.LifeDBGitModule"]
+  }
+}

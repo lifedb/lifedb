@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import { GeminiResponse, AggregatedContext } from '../types';
 import { buildSystemPrompt } from './contextManager';
+import { ChatMessage } from './chatLog';
 
 let genAI: GoogleGenerativeAI | null = null;
 let model: GenerativeModel | null = null;
@@ -21,18 +22,21 @@ export const isGeminiInitialized = (): boolean => {
 };
 
 /**
- * Send a prompt to Gemini with file content and aggregated context
+ * Send a prompt to Gemini with file content, aggregated context, and chat history
+ * Chat history is included in the system prompt but not shown in the UI
  */
 export const promptWithContext = async (
   userPrompt: string,
   fileContent: string,
-  context: AggregatedContext
+  context: AggregatedContext,
+  chatHistory?: ChatMessage[]
 ): Promise<GeminiResponse> => {
   if (!model) {
     throw new Error('Gemini not initialized. Please set your API key in Settings.');
   }
 
-  const systemPrompt = buildSystemPrompt(context, fileContent);
+  // Build system prompt with user context, document, and chat history
+  const systemPrompt = buildSystemPrompt(context, fileContent, chatHistory);
   
   const fullPrompt = `${systemPrompt}\n\n## User Request\n${userPrompt}\n\nPlease provide the updated file content. Start your response with the file content wrapped in triple backticks, then optionally provide an explanation.`;
 

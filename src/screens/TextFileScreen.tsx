@@ -10,6 +10,7 @@ import {
   Text,
   ScrollView,
   FlatList,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +19,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { GeminiPromptBar } from '../components/GeminiPromptBar';
 import { UndoControls } from '../components/UndoControls';
-import { readTextFile, writeTextFile } from '../services/fileSystem';
+import { readTextFile, writeTextFile, getFileContext, setFileContext } from '../services/fileSystem';
 import { getAggregatedContext } from '../services/contextManager';
 import { promptWithContext, isGeminiInitialized } from '../services/geminiService';
 import {
@@ -32,7 +33,8 @@ import {
 } from '../services/diffTracker';
 import { addConversation, getChatMessages, ChatMessage } from '../services/chatLog';
 import { backupToICloud } from '../services/icloudBackup';
-import { commitIfInRepo } from '../services/gitService';
+import { commitAndSync, SyncResult } from '../services/gitService';
+
 
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TextFile'>;
@@ -46,8 +48,10 @@ const markdownStyles = {
   },
   heading1: {
     fontSize: 32,
+    lineHeight: 42,
     fontWeight: '700' as const,
-    marginVertical: 12,
+    marginTop: 0,
+    marginBottom: 12,
     color: '#000',
   },
   heading2: {
@@ -131,9 +135,16 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
   const [historyCount, setHistoryCount] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [showContext, setShowContext] = useState(false);
+  const [isEditingContext, setIsEditingContext] = useState(false);
+  const [contextContent, setContextContent] = useState('');
+  const [originalContextContent, setOriginalContextContent] = useState('');
   const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [contextPreview, setContextPreview] = useState('');
+  const [syncStatus, setSyncStatus] = useState<{ message: string; success: boolean } | null>(null);
+  const [showSyncStatus, setShowSyncStatus] = useState(false);
+  const syncStatusOpacity = useRef(new Animated.Value(0)).current;
+  const syncStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedContent = useRef('');
 
@@ -148,9 +159,12 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
       setOriginalContent(fileContent);
       lastSavedContent.current = fileContent;
       
-      // Load context preview
+      // Load context preview and content
       const context = await getAggregatedContext(path);
       setContextPreview(context.fullContextString || 'No context defined');
+      const fileContextContent = await getFileContext(path);
+      setContextContent(fileContextContent);
+      setOriginalContextContent(fileContextContent);
       
       // Update undo/redo state
       await updateUndoRedoState();
@@ -179,60 +193,71 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
   }, [loadFile]);
 
   useEffect(() => {
+    // Get parent folder name for back button
+    const pathParts = path.split('/').filter(Boolean);
+    const parentName = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Files';
+    
+    // Truncate long file names to keep title centered
+    const truncatedName = name.length > 20 ? name.slice(0, 17) + '...' : name;
+    
     navigation.setOptions({
-      title: name,
+      title: showContext ? 'Context' : showChat ? 'Chat History' : truncatedName,
+      headerBackTitle: (showContext || showChat) ? '' : parentName,
+      headerTitleAlign: 'center',
+      headerLeft: (showContext || showChat) ? () => (
+        <TouchableOpacity
+          onPress={() => {
+            setShowContext(false);
+            setShowChat(false);
+            setIsEditingContext(false);
+          }}
+          style={styles.headerButton}
+        >
+          <Ionicons name="chevron-back" size={22} color="#007AFF" />
+        </TouchableOpacity>
+      ) : undefined,
       headerRight: () => (
-        <View style={styles.headerButtons}>
+        <View style={[styles.headerButtons, { minWidth: 60 }]}>
           <TouchableOpacity
             onPress={() => {
-              setIsEditing(!isEditing);
-              setShowContext(false);
-              setShowChat(false);
-            }}
-            style={styles.headerButton}
-          >
-            <Ionicons
-              name={isEditing ? 'eye-outline' : 'create-outline'}
-              size={24}
-              color="#007AFF"
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={async () => {
-              if (!showChat) {
-                const msgs = await getChatMessages(path);
-                setChatMessages(msgs);
+              if (showContext) {
+                setShowContext(false);
+                setIsEditingContext(false);
+              } else {
+                setShowContext(true);
+                setShowChat(false);
+                setIsEditing(false);
               }
-              setShowChat(!showChat);
-              setShowContext(false);
-              setIsEditing(false);
-            }}
-            style={styles.headerButton}
-          >
-            <Ionicons
-              name="chatbubbles-outline"
-              size={24}
-              color={showChat ? '#007AFF' : '#8E8E93'}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => {
-              setShowContext(!showContext);
-              setShowChat(false);
-              setIsEditing(false);
             }}
             style={styles.headerButton}
           >
             <Ionicons
               name="information-circle-outline"
-              size={24}
-              color={showContext ? '#007AFF' : '#8E8E93'}
+              size={22}
+              color={showContext ? '#34C759' : '#007AFF'}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              if (showContext) {
+                setIsEditingContext(!isEditingContext);
+              } else {
+                setIsEditing(!isEditing);
+                setShowChat(false);
+              }
+            }}
+            style={styles.headerButton}
+          >
+            <Ionicons
+              name={(showContext ? isEditingContext : isEditing) ? 'eye-outline' : 'create-outline'}
+              size={22}
+              color="#007AFF"
             />
           </TouchableOpacity>
         </View>
       ),
     });
-  }, [navigation, name, showContext, showChat, isEditing, path]);
+  }, [navigation, name, showContext, showChat, isEditing, isEditingContext, path]);
 
   // Auto-save with debounce
   const saveContent = useCallback(async (newContent: string) => {
@@ -244,13 +269,53 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
       await writeTextFile(path, newContent);
       
       // Auto-backup to iCloud (fire-and-forget)
-      backupToICloud().catch(err => console.log('Auto-backup failed:', err));
+      backupToICloud().catch((err: Error) => console.log('Auto-backup failed:', err));
       
-      // Auto-commit to git if in a repo (fire-and-forget)
+      // Auto-commit and sync to git if in a repo (fire-and-forget)
       const fileName = path.split('/').pop() || 'file';
-      commitIfInRepo(path, `Update ${fileName}`).catch(err => 
-        console.log('Auto-commit failed:', err)
-      );
+      commitAndSync(path, `Update ${fileName}`).then((result) => {
+        // Show sync status with animation
+        setSyncStatus({ message: result.message, success: result.success });
+        setShowSyncStatus(true);
+        Animated.timing(syncStatusOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+        
+        // Clear after 2.5 seconds with fade out
+        if (syncStatusTimeoutRef.current) clearTimeout(syncStatusTimeoutRef.current);
+        syncStatusTimeoutRef.current = setTimeout(() => {
+          Animated.timing(syncStatusOpacity, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }).start(() => {
+            setShowSyncStatus(false);
+            setSyncStatus(null);
+          });
+        }, 2500);
+      }).catch((err: Error) => {
+        setSyncStatus({ message: `Fail: ${err.message}`, success: false });
+        setShowSyncStatus(true);
+        Animated.timing(syncStatusOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+        
+        if (syncStatusTimeoutRef.current) clearTimeout(syncStatusTimeoutRef.current);
+        syncStatusTimeoutRef.current = setTimeout(() => {
+          Animated.timing(syncStatusOpacity, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }).start(() => {
+            setShowSyncStatus(false);
+            setSyncStatus(null);
+          });
+        }, 2500);
+      });
       
       lastSavedContent.current = newContent;
       await updateUndoRedoState();
@@ -294,7 +359,7 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
       }
 
       const context = await getAggregatedContext(path);
-      const response = await promptWithContext(prompt, content, context);
+      const response = await promptWithContext(prompt, content, context, chatMessages);
       
       // Record Gemini change
       await recordChange(path, content, response.newContent, 'gemini', { prompt });
@@ -349,7 +414,7 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
   }, []);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -357,7 +422,6 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
       >
         {showChat ? (
           <View style={styles.chatContainer}>
-            <Text style={styles.chatLabel}>Chat History</Text>
             {chatMessages.length === 0 ? (
               <View style={styles.chatEmpty}>
                 <Ionicons name="chatbubble-outline" size={48} color="#C7C7CC" />
@@ -388,20 +452,39 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
             )}
           </View>
         ) : showContext ? (
-          <ScrollView style={styles.contextContainer}>
-            <Text style={styles.contextLabel}>Aggregated Context</Text>
-            <Text style={styles.contextText}>{contextPreview}</Text>
-            <TouchableOpacity
-              style={styles.editContextButton}
-              onPress={() =>
-                navigation.navigate('EditContext', { path, isDirectory: false })
-              }
+          isEditingContext ? (
+            <TextInput
+              style={styles.editor}
+              value={contextContent}
+              onChangeText={async (text) => {
+                setContextContent(text);
+                await setFileContext(path, text);
+              }}
+              multiline={true}
+              textAlignVertical="top"
+              placeholder="Add context information here..."
+              placeholderTextColor="#999"
+            />
+          ) : (
+            <TouchableOpacity 
+              style={styles.markdownContainer}
+              onPress={() => setIsEditingContext(true)}
+              activeOpacity={1}
             >
-              <Text style={styles.editContextButtonText}>
-                Edit File Context
-              </Text>
+              <ScrollView 
+                style={styles.markdownScrollContainer}
+                contentContainerStyle={styles.markdownScroll}
+              >
+                {contextContent ? (
+                  <Markdown style={markdownStyles}>
+                    {contextContent}
+                  </Markdown>
+                ) : (
+                  <Text style={styles.placeholder}>Tap to add context for this file...</Text>
+                )}
+              </ScrollView>
             </TouchableOpacity>
-          </ScrollView>
+          )
         ) : isEditing ? (
           <TextInput
             style={styles.editor}
@@ -420,7 +503,10 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
             onPress={() => setIsEditing(true)}
             activeOpacity={1}
           >
-            <ScrollView style={styles.markdownScroll}>
+            <ScrollView 
+              style={styles.markdownScrollContainer}
+              contentContainerStyle={styles.markdownScroll}
+            >
               {content ? (
                 <Markdown style={markdownStyles}>
                   {content}
@@ -437,8 +523,31 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
           canRedo={canRedoState}
           onUndo={handleUndo}
           onRedo={handleRedo}
-          historyCount={historyCount}
-          currentIndex={currentIndex}
+          showChat={showChat}
+          onChatPress={async () => {
+            if (!showChat) {
+              const msgs = await getChatMessages(path);
+              setChatMessages(msgs);
+            }
+            setShowChat(!showChat);
+            setShowContext(false);
+            setIsEditing(false);
+          }}
+          statusContent={
+            <>
+              <Text style={styles.counterText}>{currentIndex + 1}/{historyCount}</Text>
+              {showSyncStatus && syncStatus && (
+                <Animated.View style={[styles.syncToastOverlay, syncStatus.success ? styles.syncToastSuccess : styles.syncToastError, { opacity: syncStatusOpacity }]}>
+                  <Ionicons 
+                    name={syncStatus.success ? "checkmark-circle" : "alert-circle"} 
+                    size={14} 
+                    color="#fff" 
+                  />
+                  <Text style={styles.syncToastText}>{syncStatus.message}</Text>
+                </Animated.View>
+              )}
+            </>
+          }
         />
 
         <GeminiPromptBar
@@ -453,10 +562,48 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f5f5f5',
+  },
+  statusBar: {
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 16,
+  },
+  counterText: {
+    fontSize: 12,
+    color: '#8E8E93',
+  },
+  syncToast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
+  },
+  syncToastOverlay: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
+  },
+  syncToastSuccess: {
+    backgroundColor: '#34C759',
+  },
+  syncToastError: {
+    backgroundColor: '#FF3B30',
+  },
+  syncToastText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500' as const,
   },
   keyboardView: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   editor: {
     flex: 1,
@@ -464,16 +611,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: '#1a1a1a',
+    backgroundColor: '#fff',
   },
   headerButton: {
-    marginRight: 8,
+    padding: 6,
   },
   headerButtonText: {
     fontSize: 22,
   },
   contextContainer: {
     flex: 1,
-    padding: 16,
     backgroundColor: '#f8f8f8',
   },
   contextLabel: {
@@ -504,6 +651,35 @@ const styles = StyleSheet.create({
   headerButtons: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+  },
+  overlayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e0e0e0',
+  },
+  overlayBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 80,
+  },
+  overlayBackText: {
+    fontSize: 17,
+    color: '#007AFF',
+  },
+  overlayTitle: {
+    fontSize: 17,
+    fontWeight: '600' as const,
+    color: '#000',
+  },
+  contextScrollView: {
+    flex: 1,
+    padding: 16,
   },
   chatContainer: {
     flex: 1,
@@ -573,10 +749,14 @@ const styles = StyleSheet.create({
   markdownContainer: {
     flex: 1,
     backgroundColor: '#fff',
+    marginTop: 16,
+  },
+  markdownScrollContainer: {
+    flex: 1,
   },
   markdownScroll: {
-    flex: 1,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   placeholder: {
     fontSize: 16,

@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "lifedb-git": ["../src/index"],
+      "lifedb-git/*": ["../src/*"]
+    }
+  }
+}
