@@ -122,6 +122,16 @@ export const GitHubSyncScreen: React.FC<Props> = ({ navigation }) => {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={() => navigation.navigate('FileIssue')}>
+          <Ionicons name="bug-outline" size={22} color="#007AFF" />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
+
   const handleSelectRepo = async (repo: Repository) => {
     await AsyncStorage.setItem(SELECTED_REPO_KEY, repo.fullName);
     setSelectedRepo(repo.fullName);

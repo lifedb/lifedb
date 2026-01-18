@@ -49,4 +49,5 @@ export type RootStackParamList = {
   Settings: undefined;
   EditContext: { path: string; isDirectory: boolean };
   GitHubSync: undefined;
+  FileIssue: undefined;
 };

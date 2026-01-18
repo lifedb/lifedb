@@ -52,6 +52,16 @@ export const SettingsScreen: React.FC<Props> = ({ navigation }) => {
     loadSettings();
   }, []);
 
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={() => navigation.navigate('FileIssue')}>
+          <Ionicons name="bug-outline" size={22} color="#007AFF" />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
+
   const loadSettings = async () => {
     setIsLoading(true);
     try {

@@ -16,6 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.danielsuo.lifedb",
+      "appleTeamId": "BEYQ438FZ3",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }

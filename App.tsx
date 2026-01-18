@@ -8,11 +8,13 @@ import { TextFileScreen } from './src/screens/TextFileScreen';
 import { EditContextScreen } from './src/screens/EditContextScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { GitHubSyncScreen } from './src/screens/GitHubSyncScreen';
+import { FileIssueScreen } from './src/screens/FileIssueScreen';
 import { initializeFileSystem } from './src/services/fileSystem';
 import { initializeDiffStorage } from './src/services/diffTracker';
 import { getApiKey } from './src/services/settingsService';
 import { initializeGemini } from './src/services/geminiService';
 import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -61,14 +63,17 @@ export default function App() {
           initialRouteName="Folder"
           screenOptions={{
             headerStyle: {
-              backgroundColor: '#f5f5f5',
+              backgroundColor: '#fff',
             },
             headerShadowVisible: false,
             headerTintColor: '#007AFF',
             headerTitleStyle: {
               fontWeight: '600' as const,
+              color: '#007AFF',
             },
-            headerBackTitle: 'Back',
+            headerBackTitleStyle: {
+              fontSize: 17,
+            },
           }}
         >
           <Stack.Screen
@@ -94,6 +99,11 @@ export default function App() {
             name="GitHubSync"
             component={GitHubSyncScreen}
             options={{ title: 'GitHub Sync' }}
+          />
+          <Stack.Screen
+            name="FileIssue"
+            component={FileIssueScreen}
+            options={{ title: 'File Issue' }}
           />
         </Stack.Navigator>
       </NavigationContainer>

@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import {
@@ -71,13 +72,18 @@ export const EditContextScreen: React.FC<Props> = ({ navigation, route }) => {
     navigation.setOptions({
       title: `${isDirectory ? '📁' : '📄'} Context`,
       headerRight: () => (
-        <TouchableOpacity onPress={handleSave} disabled={!hasChanges}>
-          <Text
-            style={[styles.saveButton, !hasChanges && styles.saveButtonDisabled]}
-          >
-            Save
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity onPress={() => navigation.navigate('FileIssue')}>
+            <Ionicons name="bug-outline" size={22} color="#007AFF" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleSave} disabled={!hasChanges}>
+            <Text
+              style={[styles.saveButton, !hasChanges && styles.saveButtonDisabled]}
+            >
+              Save
+            </Text>
+          </TouchableOpacity>
+        </View>
       ),
     });
   }, [navigation, path, isDirectory, hasChanges]);
@@ -142,5 +148,10 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: {
     color: '#ccc',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
 });

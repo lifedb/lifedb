@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { usePreventRemove } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { GeminiPromptBar } from '../components/GeminiPromptBar';
 import { UndoControls } from '../components/UndoControls';
@@ -202,22 +203,17 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
     
     navigation.setOptions({
       title: showContext ? 'Context' : showChat ? 'Chat History' : truncatedName,
-      headerBackTitle: (showContext || showChat) ? '' : parentName,
+      headerBackTitle: (showContext || showChat) ? 'Back' : parentName,
       headerTitleAlign: 'center',
-      headerLeft: (showContext || showChat) ? () => (
-        <TouchableOpacity
-          onPress={() => {
-            setShowContext(false);
-            setShowChat(false);
-            setIsEditingContext(false);
-          }}
-          style={styles.headerButton}
-        >
-          <Ionicons name="chevron-back" size={22} color="#007AFF" />
-        </TouchableOpacity>
-      ) : undefined,
+      headerBackButtonMenuEnabled: false,
       headerRight: () => (
         <View style={[styles.headerButtons, { minWidth: 60 }]}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('FileIssue')}
+            style={styles.headerButton}
+          >
+            <Ionicons name="bug-outline" size={22} color="#007AFF" />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => {
               if (showContext) {
@@ -229,12 +225,15 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
                 setIsEditing(false);
               }
             }}
-            style={styles.headerButton}
+            style={[
+              styles.headerButton,
+              showContext && { backgroundColor: '#E3F2FD', borderRadius: 16 }
+            ]}
           >
             <Ionicons
               name="information-circle-outline"
               size={22}
-              color={showContext ? '#34C759' : '#007AFF'}
+              color="#007AFF"
             />
           </TouchableOpacity>
           <TouchableOpacity
@@ -258,6 +257,15 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
       ),
     });
   }, [navigation, name, showContext, showChat, isEditing, isEditingContext, path]);
+
+  // Intercept back navigation when in context/chat mode using usePreventRemove
+  // This properly integrates with native-stack unlike beforeRemove listener
+  usePreventRemove(showContext || showChat, ({ data }) => {
+    // Close the overlay instead of navigating away
+    setShowContext(false);
+    setShowChat(false);
+    setIsEditingContext(false);
+  });
 
   // Auto-save with debounce
   const saveContent = useCallback(async (newContent: string) => {
@@ -437,11 +445,22 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
                     styles.chatMessage,
                     item.role === 'user' ? styles.chatMessageUser : styles.chatMessageAssistant
                   ]}>
-                    <Text style={styles.chatMessageRole}>
+                    <Text style={[
+                      styles.chatMessageRole,
+                      item.role === 'user' && { color: 'rgba(255,255,255,0.8)' }
+                    ]}>
                       {item.role === 'user' ? 'You' : 'Gemini'}
                     </Text>
-                    <Text style={styles.chatMessageContent}>{item.content}</Text>
-                    <Text style={styles.chatMessageTime}>
+                    <Text style={[
+                      styles.chatMessageContent,
+                      item.role === 'user' && { color: '#fff' }
+                    ]}>
+                      {item.content}
+                    </Text>
+                    <Text style={[
+                      styles.chatMessageTime,
+                      item.role === 'user' && { color: 'rgba(255,255,255,0.7)' }
+                    ]}>
                       {new Date(item.timestamp).toLocaleString()}
                     </Text>
                   </View>

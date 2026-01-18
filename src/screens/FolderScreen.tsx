@@ -167,6 +167,12 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
       headerRight: () => (
         <View style={styles.headerButtons}>
           <TouchableOpacity
+            onPress={() => navigation.navigate('FileIssue')}
+            style={styles.headerButton}
+          >
+            <Ionicons name="bug-outline" size={24} color="#007AFF" />
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => navigation.navigate('EditContext', { path, isDirectory: true })}
             style={styles.headerButton}
           >
