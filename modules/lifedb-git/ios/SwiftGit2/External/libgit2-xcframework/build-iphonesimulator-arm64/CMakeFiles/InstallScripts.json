@@ -1,0 +1,13 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/dsuo/src/lifedb/modules/lifedb-git/ios/SwiftGit2/External/libgit2-xcframework/build-iphonesimulator-arm64/cmake_install.cmake",
+		"/Users/dsuo/src/lifedb/modules/lifedb-git/ios/SwiftGit2/External/libgit2-xcframework/build-iphonesimulator-arm64/src/cmake_install.cmake",
+		"/Users/dsuo/src/lifedb/modules/lifedb-git/ios/SwiftGit2/External/libgit2-xcframework/build-iphonesimulator-arm64/deps/llhttp/cmake_install.cmake",
+		"/Users/dsuo/src/lifedb/modules/lifedb-git/ios/SwiftGit2/External/libgit2-xcframework/build-iphonesimulator-arm64/deps/xdiff/cmake_install.cmake",
+		"/Users/dsuo/src/lifedb/modules/lifedb-git/ios/SwiftGit2/External/libgit2-xcframework/build-iphonesimulator-arm64/deps/ntlmclient/cmake_install.cmake",
+		"/Users/dsuo/src/lifedb/modules/lifedb-git/ios/SwiftGit2/External/libgit2-xcframework/build-iphonesimulator-arm64/src/libgit2/cmake_install.cmake",
+		"/Users/dsuo/src/lifedb/modules/lifedb-git/ios/SwiftGit2/External/libgit2-xcframework/build-iphonesimulator-arm64/src/util/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

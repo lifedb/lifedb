@@ -1,0 +1,82 @@
+#!/bin/bash
+set -e
+
+# Find the script's directory and navigate to External
+SCRIPT_DIR=$(dirname "$0")
+cd "$SCRIPT_DIR/.."
+ROOT_PATH=$(pwd)
+
+LIBGIT2_SRC="$ROOT_PATH/libgit2"
+BUILD_DIR="$ROOT_PATH/libgit2-xcframework"
+IOS_MIN_VERSION="15.1"
+
+echo "Building libgit2 XCFramework..."
+echo "Source: $LIBGIT2_SRC"
+echo "Build directory: $BUILD_DIR"
+
+mkdir -p "$BUILD_DIR"
+cd "$BUILD_DIR"
+
+# Function to build for a specific platform
+build_platform() {
+    local PLATFORM=$1
+    local ARCH=$2
+    local SDK=$3
+    local BUILD_SUBDIR="build-$PLATFORM-$ARCH"
+    
+    echo "Building for $PLATFORM ($ARCH)..."
+    
+    mkdir -p "$BUILD_SUBDIR"
+    cd "$BUILD_SUBDIR"
+    
+    local SDK_PATH=$(xcrun --sdk $SDK --show-sdk-path)
+    local CMAKE_SYSTEM_NAME="iOS"
+    local CMAKE_OSX_DEPLOYMENT_TARGET="$IOS_MIN_VERSION"
+    
+    if [ "$PLATFORM" = "iphonesimulator" ]; then
+        local PLATFORM_FLAG=""
+    else
+        local PLATFORM_FLAG="-miphoneos-version-min=$IOS_MIN_VERSION"
+    fi
+    
+    cmake "$LIBGIT2_SRC" \
+        -DCMAKE_SYSTEM_NAME=iOS \
+        -DCMAKE_OSX_ARCHITECTURES="$ARCH" \
+        -DCMAKE_OSX_SYSROOT="$SDK_PATH" \
+        -DCMAKE_OSX_DEPLOYMENT_TARGET="$IOS_MIN_VERSION" \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DBUILD_CLI=OFF \
+        -DBUILD_TESTS=OFF \
+        -DBUILD_EXAMPLES=OFF \
+        -DUSE_SSH=OFF \
+        -DUSE_HTTPS=SecureTransport \
+        -DUSE_ICONV=ON \
+        -DREGEX_BACKEND=regcomp \
+        -DCMAKE_C_FLAGS="-fembed-bitcode" \
+        -DCMAKE_INSTALL_PREFIX="$BUILD_DIR/$BUILD_SUBDIR/install"
+    
+    make -j$(sysctl -n hw.ncpu)
+    make install
+    
+    cd ..
+    echo "Completed $PLATFORM ($ARCH)"
+}
+
+# Build for iphoneos (arm64)
+build_platform "iphoneos" "arm64" "iphoneos"
+
+# Build for iphonesimulator (arm64) - Apple Silicon simulators
+build_platform "iphonesimulator" "arm64" "iphonesimulator"
+
+echo "Creating XCFramework..."
+
+# Create xcframework from the static libraries
+xcodebuild -create-xcframework \
+    -library "$BUILD_DIR/build-iphoneos-arm64/install/lib/libgit2.a" \
+    -headers "$BUILD_DIR/build-iphoneos-arm64/install/include" \
+    -library "$BUILD_DIR/build-iphonesimulator-arm64/install/lib/libgit2.a" \
+    -headers "$BUILD_DIR/build-iphonesimulator-arm64/install/include" \
+    -output "$BUILD_DIR/libgit2.xcframework"
+
+echo "XCFramework created at: $BUILD_DIR/libgit2.xcframework"
+echo "Done!"
