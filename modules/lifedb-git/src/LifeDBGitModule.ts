@@ -32,6 +32,8 @@ declare class LifeDBGitModule extends NativeModule<LifeDBGitModuleEvents> {
   push(localPath: string, username: string, token: string, commitMessage: string): Promise<PushResult>;
   isRepository(localPath: string): Promise<boolean>;
   status(localPath: string): Promise<StatusResult>;
+  add(localPath: string, filepath: string): Promise<GitResult>;
+  rm(localPath: string, filepath: string): Promise<GitResult>;
 }
 
 // This call loads the native module object from the JSI.

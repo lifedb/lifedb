@@ -438,5 +438,67 @@ public class LifeDBGitModule: Module {
         "total": 0
       ]
     }
+
+    // Stage a specific file (git add <filepath>)
+    AsyncFunction("add") { (localPath: String, filepath: String) -> [String: Any] in
+      ensureLibgit2Initialized()
+      
+      let localURL = URL(fileURLWithPath: localPath)
+      
+      // Open repository
+      let repoResult = Repository.at(localURL)
+      guard case .success(let repo) = repoResult else {
+        if case .failure(let error) = repoResult {
+          return ["success": false, "error": error.localizedDescription]
+        }
+        return ["success": false, "error": "Failed to open repository"]
+      }
+      
+      // Stage the file
+      let addResult = repo.add(path: filepath)
+      
+      switch addResult {
+      case .success:
+        return ["success": true, "message": "Staged \(filepath)"]
+      case .failure(let error):
+        return ["success": false, "error": "Failed to stage file: \(error.localizedDescription)"]
+      }
+    }
+
+    // Remove a file from git index (git rm --cached <filepath>)
+    AsyncFunction("rm") { (localPath: String, filepath: String) -> [String: Any] in
+      ensureLibgit2Initialized()
+      
+      let localURL = URL(fileURLWithPath: localPath)
+      
+      // Open repository
+      let repoResult = Repository.at(localURL)
+      guard case .success(let repo) = repoResult else {
+        if case .failure(let error) = repoResult {
+          return ["success": false, "error": error.localizedDescription]
+        }
+        return ["success": false, "error": "Failed to open repository"]
+      }
+      
+      // Get the index
+      var index: OpaquePointer?
+      guard git_repository_index(&index, repo.pointer) == GIT_OK.rawValue else {
+        return ["success": false, "error": "Failed to get index: \(getGitError())"]
+      }
+      defer { git_index_free(index) }
+      
+      // Remove the file from the index
+      let removeResult = git_index_remove_bypath(index, filepath)
+      if removeResult != GIT_OK.rawValue {
+        return ["success": false, "error": "Failed to remove file from index: \(getGitError())"]
+      }
+      
+      // Write the index
+      guard git_index_write(index) == GIT_OK.rawValue else {
+        return ["success": false, "error": "Failed to write index: \(getGitError())"]
+      }
+      
+      return ["success": true, "message": "Removed \(filepath) from index"]
+    }
   }
 }

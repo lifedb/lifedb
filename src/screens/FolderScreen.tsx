@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   FlatList,
@@ -11,6 +11,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Platform,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,13 +21,15 @@ import { RootStackParamList, FileItem } from '../types';
 import { FileListItem } from '../components/FileListItem';
 import {
   listDirectory,
-  createFolder,
-  createTextFile,
-  deleteFolder,
-  deleteTextFile,
   initializeFileSystem,
-  rename,
 } from '../services/fileSystem';
+import {
+  createFileWithGit,
+  createFolderWithGit,
+  deleteFileWithGit,
+  deleteFolderWithGit,
+  renameWithGit,
+} from '../services/gitFileOperations';
 import { SyncLog } from '../services/gitSyncService';
 import { syncRepo, findGitRepoRoot } from '../services/gitService';
 import {
@@ -69,6 +72,11 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
   const [githubRepos, setGithubRepos] = useState<Repository[]>([]);
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
+  
+  // Sync toast state
+  const [syncStatus, setSyncStatus] = useState<{ message: string; success: boolean } | null>(null);
+  const [showSyncStatus, setShowSyncStatus] = useState(false);
+  const syncStatusOpacity = useRef(new Animated.Value(0)).current;
 
   const loadDirectory = useCallback(async () => {
     setIsLoading(true);
@@ -221,12 +229,25 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
           style: 'destructive',
           onPress: async () => {
             try {
+              let result;
               if (item.isDirectory) {
-                await deleteFolder(item.path);
+                result = await deleteFolderWithGit(item.path);
               } else {
-                await deleteTextFile(item.path);
+                result = await deleteFileWithGit(item.path);
               }
               loadDirectory();
+              // Show sync toast
+              if (result.success) {
+                setSyncStatus({ message: result.message || 'Synced', success: true });
+              } else {
+                setSyncStatus({ message: result.error || 'Sync failed', success: false });
+              }
+              setShowSyncStatus(true);
+              Animated.sequence([
+                Animated.timing(syncStatusOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+                Animated.delay(2000),
+                Animated.timing(syncStatusOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+              ]).start(() => setShowSyncStatus(false));
             } catch (error) {
               console.error('Error deleting:', error);
               Alert.alert('Error', 'Failed to delete item');
@@ -244,15 +265,28 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
     }
 
     try {
+      let result;
       if (newItemType === 'folder') {
-        await createFolder(path, newItemName.trim());
+        result = await createFolderWithGit(path, newItemName.trim());
       } else {
         // Use the name as-is, don't auto-append .txt
-        await createTextFile(path, newItemName.trim());
+        result = await createFileWithGit(path, newItemName.trim());
       }
       setShowNewModal(false);
       setNewItemName('');
       loadDirectory();
+      // Show sync toast
+      if (result.success) {
+        setSyncStatus({ message: result.message || 'Synced', success: true });
+      } else {
+        setSyncStatus({ message: result.error || 'Sync failed', success: false });
+      }
+      setShowSyncStatus(true);
+      Animated.sequence([
+        Animated.timing(syncStatusOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.delay(2000),
+        Animated.timing(syncStatusOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]).start(() => setShowSyncStatus(false));
     } catch (error) {
       console.error('Error creating:', error);
       Alert.alert('Error', 'Failed to create item');
@@ -346,11 +380,24 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
     }
 
     try {
-      await rename(renameItem.path, renameName.trim());
+      console.log('Renaming from:', renameItem.path, 'to new name:', renameName.trim());
+      const result = await renameWithGit(renameItem.path, renameName.trim());
       setShowRenameModal(false);
       setRenameItem(null);
       setRenameName('');
       loadDirectory();
+      // Show sync toast
+      if (result.success) {
+        setSyncStatus({ message: result.message || 'Synced', success: true });
+      } else {
+        setSyncStatus({ message: result.error || 'Sync failed', success: false });
+      }
+      setShowSyncStatus(true);
+      Animated.sequence([
+        Animated.timing(syncStatusOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.delay(2000),
+        Animated.timing(syncStatusOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]).start(() => setShowSyncStatus(false));
     } catch (error) {
       console.error('Error renaming:', error);
       Alert.alert('Error', 'Failed to rename item');
@@ -386,6 +433,24 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
         }
       />
+
+      {/* Sync status toast */}
+      {showSyncStatus && syncStatus && (
+        <Animated.View 
+          style={[
+            styles.syncToast,
+            syncStatus.success ? styles.syncToastSuccess : styles.syncToastError,
+            { opacity: syncStatusOpacity }
+          ]}
+        >
+          <Ionicons 
+            name={syncStatus.success ? "checkmark-circle" : "alert-circle"} 
+            size={16} 
+            color="#fff" 
+          />
+          <Text style={styles.syncToastText}>{syncStatus.message}</Text>
+        </Animated.View>
+      )}
 
       {/* New item modal */}
       <Modal
@@ -962,6 +1027,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginTop: 2,
+  },
+  syncToast: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  syncToastSuccess: {
+    backgroundColor: '#34C759',
+  },
+  syncToastError: {
+    backgroundColor: '#FF3B30',
+  },
+  syncToastText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500' as const,
   },
 });
 

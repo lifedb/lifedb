@@ -1,4 +1,5 @@
 import { Paths, File, Directory } from 'expo-file-system';
+import * as LegacyFileSystem from 'expo-file-system/legacy';
 import { FileItem } from '../types';
 
 // Base directory for all user files
@@ -248,22 +249,41 @@ export const pathExists = async (relativePath: string): Promise<boolean> => {
  * Rename a file or folder
  */
 export const rename = async (relativePath: string, newName: string): Promise<void> => {
-  const oldFile = getFile(relativePath);
-  const oldName = relativePath.split('/').pop() || '';
-  const parentPath = relativePath.slice(0, relativePath.lastIndexOf('/')) || '/';
+  // Remove trailing slashes from path
+  const cleanPath = relativePath.replace(/\/+$/, '');
+  const oldName = cleanPath.split('/').pop() || '';
+  const parentPath = cleanPath.slice(0, cleanPath.lastIndexOf('/')) || '/';
   const parentDir = getDirectory(parentPath);
-  const newFile = new File(parentDir, newName);
   
-  await oldFile.move(newFile);
+  // Check if it's a directory or file
+  const oldDir = getDirectory(cleanPath);
+  const isDir = oldDir.exists;
   
-  // Try to rename context file if it exists
-  try {
-    const oldContextFile = new File(parentDir, getFileContextName(oldName));
-    if (oldContextFile.exists) {
-      const newContextFile = new File(parentDir, getFileContextName(newName));
-      await oldContextFile.move(newContextFile);
+  console.log('Rename debug: cleanPath=', cleanPath, 'oldName=', oldName, 'newName=', newName, 'isDir=', isDir);
+  
+  if (isDir) {
+    // Handle directory rename using legacy API
+    const newPath = parentDir.uri + '/' + newName;
+    console.log('Moving directory from', oldDir.uri, 'to', newPath);
+    await LegacyFileSystem.moveAsync({
+      from: oldDir.uri,
+      to: newPath,
+    });
+  } else {
+    // Handle file rename
+    const oldFile = getFile(relativePath);
+    const newFile = new File(parentDir, newName);
+    await oldFile.move(newFile);
+    
+    // Try to rename context file if it exists
+    try {
+      const oldContextFile = new File(parentDir, getFileContextName(oldName));
+      if (oldContextFile.exists) {
+        const newContextFile = new File(parentDir, getFileContextName(newName));
+        await oldContextFile.move(newContextFile);
+      }
+    } catch {
+      // Context file might not exist
     }
-  } catch {
-    // Context file might not exist for directories
   }
 };

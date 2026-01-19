@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   TextInput,
@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Image,
+  Animated,
 } from 'react-native';
 
 const GeminiLogo = require('../../assets/gemini.png');
@@ -14,27 +15,69 @@ interface GeminiPromptBarProps {
   onSubmit: (prompt: string) => Promise<void>;
   disabled?: boolean;
   placeholder?: string;
+  loading?: boolean;
 }
 
 export const GeminiPromptBar: React.FC<GeminiPromptBarProps> = ({
   onSubmit,
   disabled = false,
   placeholder = 'Ask Gemini to edit this file...',
+  loading = false,
 }) => {
   const [prompt, setPrompt] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Combined loading state: either parent says loading OR we're submitting
+  const isLoading = loading || isSubmitting;
+  
+  // Animation values for smooth transition
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const spinnerFadeAnim = useRef(new Animated.Value(0)).current;
+  
+  // Animate transition when loading state changes
+  useEffect(() => {
+    if (isLoading) {
+      // Fade out logo, fade in spinner
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(spinnerFadeAnim, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // Fade in logo, fade out spinner
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(spinnerFadeAnim, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [isLoading, fadeAnim, spinnerFadeAnim]);
 
   const handleSubmit = async () => {
     if (!prompt.trim() || isLoading || disabled) return;
 
-    setIsLoading(true);
+    setIsSubmitting(true);
     try {
       await onSubmit(prompt.trim());
       setPrompt('');
     } catch (error) {
       console.error('Gemini prompt error:', error);
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -55,16 +98,20 @@ export const GeminiPromptBar: React.FC<GeminiPromptBarProps> = ({
       <TouchableOpacity
         style={[
           styles.button,
-          (!prompt.trim() || isLoading || disabled) && styles.buttonDisabled,
+          isLoading && styles.buttonLoading,
+          (!prompt.trim() || disabled) && !isLoading && styles.buttonDisabled,
         ]}
         onPress={handleSubmit}
         disabled={!prompt.trim() || isLoading || disabled}
       >
-        {isLoading ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <Image source={GeminiLogo} style={styles.geminiIcon} />
-        )}
+        <View style={styles.buttonContent}>
+          <Animated.View style={[styles.iconWrapper, { opacity: fadeAnim }]}>
+            <Image source={GeminiLogo} style={styles.geminiIcon} />
+          </Animated.View>
+          <Animated.View style={[styles.iconWrapper, styles.spinnerWrapper, { opacity: spinnerFadeAnim }]}>
+            <ActivityIndicator size="small" color="#4285F4" />
+          </Animated.View>
+        </View>
       </TouchableOpacity>
     </View>
   );
@@ -106,6 +153,11 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.4,
   },
+  buttonLoading: {
+    opacity: 1,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 22,
+  },
   buttonText: {
     fontSize: 20,
   },
@@ -113,5 +165,19 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     resizeMode: 'contain',
+  },
+  buttonContent: {
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapper: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spinnerWrapper: {
+    // Same position as iconWrapper, no additional styles needed
   },
 });

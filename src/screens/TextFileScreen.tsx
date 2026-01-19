@@ -144,6 +144,7 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
   const [contextPreview, setContextPreview] = useState('');
   const [syncStatus, setSyncStatus] = useState<{ message: string; success: boolean } | null>(null);
   const [showSyncStatus, setShowSyncStatus] = useState(false);
+  const [isGeminiLoading, setIsGeminiLoading] = useState(false);
   const syncStatusOpacity = useRef(new Animated.Value(0)).current;
   const syncStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -375,6 +376,7 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
       return;
     }
 
+    setIsGeminiLoading(true);
     try {
       // Save any pending changes first
       if (saveTimeoutRef.current) {
@@ -407,6 +409,8 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
     } catch (error) {
       console.error('Gemini error:', error);
       Alert.alert('Error', 'Failed to get response from Gemini');
+    } finally {
+      setIsGeminiLoading(false);
     }
   };
 
@@ -620,6 +624,7 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
         <GeminiPromptBar
           onSubmit={handleGeminiPrompt}
           disabled={isLoading}
+          loading={isGeminiLoading}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
