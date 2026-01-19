@@ -32,7 +32,8 @@ public struct Diff {
 	public var deltas = [Delta]()
 
 	public struct Delta {
-		public static let type = GIT_OBJECT_REF_DELTA
+		// Note: GIT_OBJECT_REF_DELTA was removed in libgit2 2.0. Using GIT_OBJECT_TAG as a placeholder.
+		public static let type = GIT_OBJECT_TAG
 
 		public var status: Status
 		public var flags: Flags

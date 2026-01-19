@@ -40,3 +40,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# libgit2 build artifacts
+modules/lifedb-git/ios/SwiftGit2/External/libgit2-xcframework/build-*
+modules/lifedb-git/ios/SwiftGit2/External/libgit2/.git

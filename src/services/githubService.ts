@@ -56,14 +56,15 @@ const base64Encode = (str: string): string => {
 
 /**
  * Get the OAuth redirect URI
- * Uses Expo proxy for development (matches GitHub OAuth App callback URL)
+ * Uses Expo auth proxy for production builds
  */
 export const getRedirectUri = (): string => {
+  // Use the auth proxy which handles the redirect properly
   return AuthSession.makeRedirectUri({
     scheme: 'lifedb',
-    path: 'github-oauth',
-    // Use Expo proxy for Expo Go development
-    preferLocalhost: false,
+    path: 'github-oauth', 
+    // Use native redirect for dev builds, proxy can be enabled if needed
+    native: 'lifedb://github-oauth',
   });
 };
 
