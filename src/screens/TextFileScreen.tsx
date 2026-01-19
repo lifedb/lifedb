@@ -196,6 +196,14 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
     loadFile();
   }, [loadFile]);
 
+  // Reset overlay states when navigating to this screen
+  useEffect(() => {
+    setShowContext(false);
+    setShowChat(false);
+    setIsEditing(false);
+    setIsEditingContext(false);
+  }, [path]);
+
   useEffect(() => {
     // Get parent folder name for back button
     const pathParts = path.split('/').filter(Boolean);
@@ -575,37 +583,39 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
           </ScrollView>
         )}
 
-        <UndoControls
-          canUndo={canUndoState}
-          canRedo={canRedoState}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          showChat={showChat}
-          onChatPress={async () => {
-            if (!showChat) {
-              const msgs = await getChatMessages(path);
-              setChatMessages(msgs);
+        <View style={{ paddingVertical: 0, justifyContent: 'center' }}>
+          <UndoControls
+            canUndo={canUndoState}
+            canRedo={canRedoState}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            showChat={showChat}
+            onChatPress={async () => {
+              if (!showChat) {
+                const msgs = await getChatMessages(path);
+                setChatMessages(msgs);
+              }
+              setShowChat(!showChat);
+              setShowContext(false);
+              setIsEditing(false);
+            }}
+            statusContent={
+              <>
+                <Text style={styles.counterText}>{currentIndex + 1}/{historyCount}</Text>
+                {showSyncStatus && syncStatus && (
+                  <Animated.View style={[styles.syncToastOverlay, syncStatus.success ? styles.syncToastSuccess : styles.syncToastError, { opacity: syncStatusOpacity }]}>
+                    <Ionicons 
+                      name={syncStatus.success ? "checkmark-circle" : "alert-circle"} 
+                      size={14} 
+                      color="#fff" 
+                    />
+                    <Text style={styles.syncToastText}>{syncStatus.message}</Text>
+                  </Animated.View>
+                )}
+              </>
             }
-            setShowChat(!showChat);
-            setShowContext(false);
-            setIsEditing(false);
-          }}
-          statusContent={
-            <>
-              <Text style={styles.counterText}>{currentIndex + 1}/{historyCount}</Text>
-              {showSyncStatus && syncStatus && (
-                <Animated.View style={[styles.syncToastOverlay, syncStatus.success ? styles.syncToastSuccess : styles.syncToastError, { opacity: syncStatusOpacity }]}>
-                  <Ionicons 
-                    name={syncStatus.success ? "checkmark-circle" : "alert-circle"} 
-                    size={14} 
-                    color="#fff" 
-                  />
-                  <Text style={styles.syncToastText}>{syncStatus.message}</Text>
-                </Animated.View>
-              )}
-            </>
-          }
-        />
+          />
+        </View>
 
         <GeminiPromptBar
           onSubmit={handleGeminiPrompt}
@@ -806,14 +816,12 @@ const styles = StyleSheet.create({
   markdownContainer: {
     flex: 1,
     backgroundColor: '#fff',
-    marginTop: 16,
   },
   markdownScrollContainer: {
     flex: 1,
   },
   markdownScroll: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
   },
   placeholder: {
     fontSize: 16,
