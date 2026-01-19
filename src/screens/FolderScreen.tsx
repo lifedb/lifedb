@@ -131,12 +131,15 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
   }, [loadDirectory]);
 
   useEffect(() => {
-    // Reload when screen is focused
+    // Reload when screen is focused only if needed
     const unsubscribe = navigation.addListener('focus', () => {
-      loadDirectory();
+      // Only reload if we don't have items loaded yet for this path
+      if (items.length === 0) {
+        loadDirectory();
+      }
     });
     return unsubscribe;
-  }, [navigation, loadDirectory]);
+  }, [navigation, loadDirectory, items.length]);
 
   // Set up header
   useEffect(() => {
@@ -374,6 +377,7 @@ export const FolderScreen: React.FC<Props> = ({ navigation, route }) => {
         onRefresh={handleRefresh}
         style={styles.list}
         contentContainerStyle={styles.listContent}
+        scrollsToTop={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="folder-open-outline" size={64} color="#C7C7CC" />

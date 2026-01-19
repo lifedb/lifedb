@@ -148,6 +148,9 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
   const syncStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedContent = useRef('');
+  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollYRef = useRef(0);
+  const editorScrollRef = useRef<ScrollView>(null);
 
   const loadFile = useCallback(async () => {
     setIsLoading(true);
@@ -241,8 +244,15 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
               if (showContext) {
                 setIsEditingContext(!isEditingContext);
               } else {
+                const wasEditing = isEditing;
                 setIsEditing(!isEditing);
                 setShowChat(false);
+                // Scroll to saved position when entering edit mode
+                if (!wasEditing) {
+                  setTimeout(() => {
+                    editorScrollRef.current?.scrollTo({ y: scrollYRef.current, animated: false });
+                  }, 100);
+                }
               }
             }}
             style={styles.headerButton}
@@ -505,36 +515,64 @@ export const TextFileScreen: React.FC<Props> = ({ navigation, route }) => {
             </TouchableOpacity>
           )
         ) : isEditing ? (
-          <TextInput
-            style={styles.editor}
-            value={content}
-            onChangeText={handleContentChange}
-            multiline={true}
-            textAlignVertical="top"
-            placeholder="Start typing markdown..."
-            placeholderTextColor="#999"
-            editable={!isLoading}
-            autoFocus={true}
-          />
-        ) : (
-          <TouchableOpacity 
+          <ScrollView
+            ref={editorScrollRef}
             style={styles.markdownContainer}
-            onPress={() => setIsEditing(true)}
-            activeOpacity={1}
+            contentContainerStyle={{ flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled"
           >
-            <ScrollView 
-              style={styles.markdownScrollContainer}
-              contentContainerStyle={styles.markdownScroll}
-            >
-              {content ? (
-                <Markdown style={markdownStyles}>
-                  {content}
-                </Markdown>
-              ) : (
-                <Text style={styles.placeholder}>Tap to start writing...</Text>
-              )}
-            </ScrollView>
-          </TouchableOpacity>
+            <TextInput
+              style={[styles.editor, { minHeight: '100%' }]}
+              value={content}
+              onChangeText={handleContentChange}
+              multiline={true}
+              textAlignVertical="top"
+              placeholder="Start typing markdown..."
+              placeholderTextColor="#999"
+              editable={!isLoading}
+              scrollEnabled={false}
+            />
+          </ScrollView>
+        ) : (
+          <ScrollView 
+            style={[styles.markdownContainer, styles.markdownScrollContainer]}
+            contentContainerStyle={styles.markdownScroll}
+            onScroll={(e) => {
+              scrollYRef.current = e.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
+            onScrollBeginDrag={() => {
+              // Mark that we're scrolling, not tapping
+              (scrollViewRef.current as any).isScrolling = true;
+            }}
+            onTouchStart={() => {
+              // Reset scroll flag on touch start
+              if (scrollViewRef.current) {
+                (scrollViewRef.current as any).isScrolling = false;
+              }
+            }}
+            onTouchEnd={() => {
+              // Only enter edit mode if we didn't scroll
+              setTimeout(() => {
+                if (scrollViewRef.current && !(scrollViewRef.current as any).isScrolling) {
+                  setIsEditing(true);
+                  // Scroll editor to same position after a brief delay
+                  setTimeout(() => {
+                    editorScrollRef.current?.scrollTo({ y: scrollYRef.current, animated: false });
+                  }, 100);
+                }
+              }, 50);
+            }}
+            ref={scrollViewRef as any}
+          >
+            {content ? (
+              <Markdown style={markdownStyles}>
+                {content}
+              </Markdown>
+            ) : (
+              <Text style={styles.placeholder}>Tap to start writing...</Text>
+            )}
+          </ScrollView>
         )}
 
         <UndoControls
